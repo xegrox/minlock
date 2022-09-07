@@ -2,12 +2,15 @@ mod shm;
 mod globals;
 mod render;
 mod surface;
+mod seat;
 mod utils;
 
-use wayland_client::EventQueue;
+use seat::{AppSeat, DispatchKeyEvents};
+use wayland_client::{EventQueue, delegate_dispatch};
 use wayland_client::protocol::wl_keyboard;
 use wayland_client::protocol::wl_seat::WlSeat;
 use wayland_protocols_wlr::input_inhibitor::v1::client::{zwlr_input_inhibit_manager_v1, zwlr_input_inhibitor_v1};
+use xkbcommon::xkb::keysyms;
 use std::time::Duration;
 use globals::GlobalsManager;
 use surface::AppSurface;
@@ -19,7 +22,8 @@ use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_surface_v1, zwlr
  
 pub struct AppState {
   running: bool,
-  pub surface: AppSurface
+  seat: AppSeat,
+  surface: AppSurface
 }
 
 fn main() {
@@ -63,6 +67,7 @@ fn main() {
 
   let state = AppState {
     running: true,
+    seat: AppSeat::new(),
     surface
   };  
   
@@ -93,6 +98,24 @@ fn main() {
 
 }
 
+delegate_dispatch!(AppState: [wl_keyboard::WlKeyboard: ()] => AppSeat);
+
+impl AsMut<AppSeat> for AppState {
+  fn as_mut(&mut self) -> &mut AppSeat { &mut self.seat }
+}
+
+impl DispatchKeyEvents for AppState {
+  fn event(
+    state: &mut Self,
+    keysym: xkbcommon::xkb::Keysym,
+    codepoint: u32
+  ) {
+    if keysym == keysyms::KEY_Escape {
+      state.running = false;
+    }
+  }
+}
+
 impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for AppState {
   fn event(
       state: &mut Self,
@@ -109,23 +132,6 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for AppState {
         state.running = false;
       }
   }
-}
-
-impl Dispatch<wl_keyboard::WlKeyboard, ()> for AppState {
-    fn event(
-        state: &mut Self,
-        _proxy: &wl_keyboard::WlKeyboard,
-        event: <wl_keyboard::WlKeyboard as Proxy>::Event,
-        _data: &(),
-        _conn: &Connection,
-        _qhandle: &QueueHandle<Self>,
-    ) {
-        if let wl_keyboard::Event::Key { key, .. } = event {
-          if key == 1 {
-            state.running = false;
-          }
-        }
-    }
 }
 
 impl Dispatch::<zwlr_input_inhibitor_v1::ZwlrInputInhibitorV1, ()> for AppState {

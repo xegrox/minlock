@@ -17,3 +17,4 @@ wayland-protocols-wlr = { version = "=0.1.0-beta.8", features = ["client"] }
 cairo-rs = "0.15.12"
 polonius-the-crab = "0.3.1"
 chrono = "0.4.22"
+xkbcommon = "0.5.0"
