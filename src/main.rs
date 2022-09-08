@@ -4,7 +4,9 @@ mod render;
 mod surface;
 mod seat;
 mod utils;
+mod password;
 
+use password::{PasswordBuffer, PasswordBufferEvent};
 use seat::{AppSeat, DispatchKeyEvents};
 use wayland_client::{EventQueue, delegate_dispatch};
 use wayland_client::protocol::wl_keyboard;
@@ -21,9 +23,11 @@ use wayland_client::protocol::wl_shm::WlShm;
 use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_surface_v1, zwlr_layer_shell_v1};
  
 pub struct AppState {
+  loop_handle: calloop::LoopHandle<'static, (EventQueue::<AppState>, Self)>,
   running: bool,
   seat: AppSeat,
-  surface: AppSurface
+  surface: AppSurface,
+  password: PasswordBuffer,
 }
 
 fn main() {
@@ -65,32 +69,34 @@ fn main() {
   layer_surface.set_keyboard_interactivity(zwlr_layer_surface_v1::KeyboardInteractivity::Exclusive);
   surface.base_surface().commit();
 
+  let mut main_loop = calloop::EventLoop::<'static, (EventQueue::<AppState>, AppState)>::try_new().expect("Failed to initialize event loop");
   let state = AppState {
+    loop_handle: main_loop.handle(),
     running: true,
     seat: AppSeat::new(),
-    surface
-  };  
+    surface,
+    password: PasswordBuffer::create(),
+  };
   
-  let mut main_loop = calloop::EventLoop::<(EventQueue::<AppState>, AppState, calloop::LoopSignal)>::try_new().expect("Failed to initialize event loop");
-  let main_loop_signal = main_loop.get_signal();
 
   let event_queue_fd = event_queue.prepare_read().unwrap().connection_fd();
   let event_queue_source = calloop::generic::Generic::new(event_queue_fd, calloop::Interest::READ, calloop::Mode::Level);
-  main_loop.handle().insert_source(event_queue_source, |_event, _metadata, (queue, state, _signal)| {
+  main_loop.handle().insert_source(event_queue_source, |_event, _metadata, (queue, state)| {
     queue.prepare_read().unwrap().read().unwrap();
     queue.dispatch_pending(state).unwrap();
     Ok(calloop::PostAction::Continue)
   }).unwrap();
 
-  main_loop.handle().insert_source(calloop::timer::Timer::immediate(), |event, _metadata, (_queue, state, _signal)| {
+  main_loop.handle().insert_source(calloop::timer::Timer::immediate(), |event, _metadata, (_queue, state)| {
     state.surface.render_clock();
     calloop::timer::TimeoutAction::ToInstant(event + Duration::from_secs(1))
   }).unwrap();
 
+  let signal = main_loop.get_signal();
   main_loop.run(
     Duration::from_secs(1), 
-    &mut (event_queue, state, main_loop_signal),
-    | (queue, state, signal)| {
+    &mut (event_queue, state),
+    |(queue, state)| {
       if !state.running {signal.stop();}
       queue.flush().unwrap();
     }
@@ -110,9 +116,28 @@ impl DispatchKeyEvents for AppState {
     keysym: xkbcommon::xkb::Keysym,
     codepoint: u32
   ) {
-    if keysym == keysyms::KEY_Escape {
-      state.running = false;
-    }
+    let event = match keysym {
+      keysyms::KEY_Escape => {
+        state.running = false;
+        PasswordBufferEvent::None
+      },
+      keysyms::KEY_BackSpace => {
+        state.password.pop()
+      }
+      _ => {
+        let ch = char::from_u32(codepoint);
+        if let Some(ch) = ch {
+          state.password.push(ch)
+        } else {
+          PasswordBufferEvent::None
+        }
+      }
+    };
+    state.surface.indicator_event(
+      event, 
+      state.loop_handle.clone(),
+      |s| {&mut s.1.surface}
+    );
   }
 }
 

@@ -1,4 +1,7 @@
 use std::sync::Arc;
+use std::time::Duration;
+use calloop::LoopHandle;
+use wayland_backend::client::ObjectData;
 use wayland_client::Proxy;
 use wayland_client::protocol::wl_shm;
 use wayland_client::protocol::wl_surface;
@@ -6,20 +9,46 @@ use wayland_client::protocol::wl_subsurface;
 use wayland_client::protocol::wl_compositor;
 use wayland_client::protocol::wl_subcompositor;
 
+use crate::password::PasswordBufferEvent;
 use crate::render::background::draw_background;
 use crate::render::clock::draw_clock;
+use crate::render::indicator::IndicatorState;
+use crate::render::indicator::draw_indicator;
 use crate::shm::slot::BufferSlotPool;
 use crate::utils::DummyObjectData;
+
+struct AppSubsurface {
+  surface: wl_surface::WlSurface,
+  subsurface: wl_subsurface::WlSubsurface,
+}
+
+impl AppSubsurface {
+  fn create(
+    wl_compositor: &wl_compositor::WlCompositor,
+    wl_subcompositor: &wl_subcompositor::WlSubcompositor,
+    parent: &wl_surface::WlSurface,
+    data: Arc::<dyn ObjectData>
+  ) -> Self {
+    let surface = wl_compositor.send_constructor::<wl_surface::WlSurface>(wl_compositor::Request::CreateSurface {}, data.clone()).unwrap();
+    let subsurface_req = wl_subcompositor::Request::GetSubsurface { surface: surface.clone(), parent: parent.clone() };
+    let subsurface = wl_subcompositor.send_constructor::<wl_subsurface::WlSubsurface>(subsurface_req, data.clone()).unwrap();
+    Self {
+      surface,
+      subsurface
+    }
+  }
+}
 
 pub struct AppSurface {
   pool: BufferSlotPool,
   width: u32,
   height: u32,
   bg_surface: wl_surface::WlSurface,
-  clock_surface: wl_surface::WlSurface,
-  clock_subsurface: wl_subsurface::WlSubsurface,
+  clock_surface: AppSubsurface,
+  clock_height: u32,
   clock_width: u32,
-  clock_height: u32
+  indicator_surface: AppSubsurface,
+  indicator_idle_timer: Option<calloop::RegistrationToken>
 }
 
 impl AppSurface {
@@ -29,22 +58,19 @@ impl AppSurface {
     wl_subcompositor: &wl_subcompositor::WlSubcompositor
   ) -> Self {
     let dummy_data = Arc::new(DummyObjectData);
-
     let bg_surface = wl_compositor.send_constructor::<wl_surface::WlSurface>(wl_compositor::Request::CreateSurface {}, dummy_data.clone()).unwrap();
-    let clock_surface = wl_compositor.send_constructor::<wl_surface::WlSurface>(wl_compositor::Request::CreateSurface {}, dummy_data.clone()).unwrap();
-
-    let clock_subsurface_req = wl_subcompositor::Request::GetSubsurface { surface: clock_surface.clone(), parent: bg_surface.clone() };
-    let clock_subsurface = wl_subcompositor.send_constructor::<wl_subsurface::WlSubsurface>(clock_subsurface_req, dummy_data.clone()).unwrap();
-
+    let clock_surface = AppSubsurface::create(wl_compositor, wl_subcompositor, &bg_surface, dummy_data.clone());
+    let indicator_surface = AppSubsurface::create(wl_compositor, wl_subcompositor, &bg_surface, dummy_data.clone());
     Self {
       pool: BufferSlotPool::create(4096, wl_shm),
       width: 0,
       height: 0,
       bg_surface,
       clock_surface,
-      clock_subsurface,
-      clock_height: 0,
       clock_width: 0,
+      clock_height: 0,
+      indicator_surface,
+      indicator_idle_timer: None
     }
   }
 
@@ -56,6 +82,7 @@ impl AppSurface {
       self.clock_height = height;
       self.render_bg();
       self.render_clock();
+      self.render_indicator(IndicatorState::Idle);
     }
   }
 
@@ -72,7 +99,7 @@ impl AppSurface {
 
   pub fn render_clock(&mut self) {
     if self.clock_width == 0 || self.clock_height == 0 {return}
-    let wl_surface = &self.clock_surface;
+    let wl_surface = &self.clock_surface.surface;
     let buffer = draw_clock(&mut self.pool, self.clock_width, self.clock_height);
     buffer.attach_to_surface(wl_surface);
     wl_surface.damage(0, 0, i32::MAX, i32::MAX);
@@ -84,9 +111,45 @@ impl AppSurface {
       self.clock_height = buffer.height();
       let x = (self.width - self.clock_width) / 2;
       let y = (self.height - self.clock_height) / 2;
-      self.clock_subsurface.set_position(x as i32, y as i32);
+      self.clock_surface.subsurface.set_position(x as i32, y as i32);
     }
 
     self.base_surface().commit();
+  }
+
+  pub fn render_indicator(&mut self, state: IndicatorState) {
+    let wl_surface = &self.indicator_surface.surface;
+    let buffer = draw_indicator(&mut self.pool, state);
+    buffer.attach_to_surface(wl_surface);
+    wl_surface.damage(0, 0, i32::MAX, i32::MAX);
+    wl_surface.commit();
+    let x = (self.width - buffer.width()) / 2;
+    let y = (self.height - self.clock_height) / 2 + self.clock_height + 20;
+    self.indicator_surface.subsurface.set_position(x as i32, y as i32);
+    self.base_surface().commit();
+  }
+
+  pub fn indicator_event<S: 'static>(
+    &mut self,
+    event: PasswordBufferEvent,
+    loop_handle: LoopHandle<'static, S>,
+    get_surface: fn(&mut S) -> &mut Self
+  ) {
+    let state = match event {
+        PasswordBufferEvent::Input(len) => IndicatorState::Input(len),
+        PasswordBufferEvent::Invalid => IndicatorState::Invalid,
+        PasswordBufferEvent::Clear => IndicatorState::Clear,
+        PasswordBufferEvent::None => return
+    };
+    self.render_indicator(state);
+    
+    if let Some(timer) = self.indicator_idle_timer {
+      loop_handle.remove(timer);
+    }
+    self.indicator_idle_timer = Some(loop_handle.insert_source(calloop::timer::Timer::from_duration(Duration::from_secs(2)), move |_, _, s| {
+      let surface = get_surface(s);
+      surface.render_indicator(IndicatorState::Idle);
+      calloop::timer::TimeoutAction::Drop
+    }).unwrap());
   }
 }
