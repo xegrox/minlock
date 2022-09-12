@@ -116,28 +116,31 @@ impl DispatchKeyEvents for AppState {
     keysym: xkbcommon::xkb::Keysym,
     codepoint: u32
   ) {
-    let event = match keysym {
+    let mut update_indicator = |event: PasswordBufferEvent| {
+      state.surface.indicator_event(
+        event, 
+        state.loop_handle.clone(),
+        |s| {&mut s.1.surface}
+      );
+    };
+    match keysym {
       keysyms::KEY_Escape => {
         state.running = false;
-        PasswordBufferEvent::None
       },
-      keysyms::KEY_BackSpace => {
-        state.password.pop()
-      }
+      keysyms::KEY_Delete | keysyms::KEY_BackSpace => {
+        let event = state.password.pop();
+        update_indicator(event);
+      },
       _ => {
-        let ch = char::from_u32(codepoint);
-        if let Some(ch) = ch {
-          state.password.push(ch)
-        } else {
-          PasswordBufferEvent::None
+        if codepoint != 0 {
+          let ch = char::from_u32(codepoint);
+          if let Some(ch) = ch {
+            let event = state.password.push(ch);
+            update_indicator(event);
+          }
         }
       }
-    };
-    state.surface.indicator_event(
-      event, 
-      state.loop_handle.clone(),
-      |s| {&mut s.1.surface}
-    );
+    }
   }
 }
 

@@ -46,6 +46,10 @@ where
             }
           }
         }
+      } else if let wl_keyboard::Event::Modifiers { mods_depressed, mods_latched, mods_locked, group, .. } =  event {
+        if let Some(xkb_state) = state.as_mut().xkb_state.as_mut() {
+          xkb_state.update_mask(mods_depressed, mods_latched, mods_locked, 0, 0, group);
+        }
       }
     }
 }
