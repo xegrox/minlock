@@ -1,39 +1,41 @@
-pub enum PasswordBufferEvent {
-  Input(u32),
-  Invalid,
-  Clear,
-  None
-}
+use pam::{Authenticator, PasswordConv};
+use users::{get_user_by_uid, get_current_uid};
 
 pub struct PasswordBuffer {
-  password: String
+  username: String,
+  password: String,
+  authenticator: Authenticator<'static, PasswordConv>
 }
 
 impl PasswordBuffer {
 
-  pub fn create() -> Self { Self { password: String::with_capacity(12) } }
-
-  pub fn pop(&mut self) -> PasswordBufferEvent {
-    self.password.pop().map_or(
-      PasswordBufferEvent::None,
-      |_| {
-        let len = self.password.len();
-        if len > 0 {
-          PasswordBufferEvent::Input(self.password.len() as u32)
-        } else {
-          PasswordBufferEvent::Clear
-        }
-      }
-    )
+  pub fn create() -> Self {
+    let user = get_user_by_uid(get_current_uid()).unwrap();
+    Self {
+      username: user.name().to_os_string().into_string().unwrap(),
+      password: String::with_capacity(12),
+      authenticator: Authenticator::with_password("lockscreen").expect("Failed to init PAM client")
+    }
   }
 
-  pub fn push(&mut self, ch: char) -> PasswordBufferEvent {
+  pub fn len(&self) -> usize {
+    self.password.len()
+  }
+
+  pub fn pop(&mut self) -> bool {
+    self.password.pop().is_some()
+  }
+
+  pub fn push(&mut self, ch: char) {
     self.password.push(ch);
-    PasswordBufferEvent::Input(self.password.len() as u32)
   }
 
-  pub fn clear(&mut self) -> PasswordBufferEvent {
+  pub fn clear(&mut self) {
     self.password.clear();
-    PasswordBufferEvent::Clear
+  }
+
+  pub fn authenticate(&mut self) -> bool {
+    self.authenticator.get_handler().set_credentials(&self.username, &self.password);
+    self.authenticator.authenticate().is_ok()
   }
 }

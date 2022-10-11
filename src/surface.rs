@@ -9,7 +9,6 @@ use wayland_client::protocol::wl_subsurface;
 use wayland_client::protocol::wl_compositor;
 use wayland_client::protocol::wl_subcompositor;
 
-use crate::password::PasswordBufferEvent;
 use crate::render::background::draw_background;
 use crate::render::clock::draw_clock;
 use crate::render::indicator::IndicatorState;
@@ -129,27 +128,22 @@ impl AppSurface {
     self.base_surface().commit();
   }
 
-  pub fn indicator_event<S: 'static>(
+  pub fn push_state<S: 'static>(
     &mut self,
-    event: PasswordBufferEvent,
+    state: IndicatorState,
     loop_handle: LoopHandle<'static, S>,
     get_surface: fn(&mut S) -> &mut Self
   ) {
-    let state = match event {
-        PasswordBufferEvent::Input(len) => IndicatorState::Input(len),
-        PasswordBufferEvent::Invalid => IndicatorState::Invalid,
-        PasswordBufferEvent::Clear => IndicatorState::Clear,
-        PasswordBufferEvent::None => return
-    };
     self.render_indicator(state);
-    
     if let Some(timer) = self.indicator_idle_timer {
       loop_handle.remove(timer);
     }
-    self.indicator_idle_timer = Some(loop_handle.insert_source(calloop::timer::Timer::from_duration(Duration::from_secs(2)), move |_, _, s| {
-      let surface = get_surface(s);
-      surface.render_indicator(IndicatorState::Idle);
-      calloop::timer::TimeoutAction::Drop
-    }).unwrap());
+    if !matches!(state, IndicatorState::Verifying) {
+      self.indicator_idle_timer = Some(loop_handle.insert_source(calloop::timer::Timer::from_duration(Duration::from_secs(2)), move |_, _, s| {
+        let surface = get_surface(s);
+        surface.render_indicator(IndicatorState::Idle);
+        calloop::timer::TimeoutAction::Drop
+      }).unwrap());
+    }
   }
 }
