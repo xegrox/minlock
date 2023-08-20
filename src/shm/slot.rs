@@ -141,7 +141,7 @@ impl ObjectData for BufferSlotData {
   fn event(
     self: std::sync::Arc<Self>,
     _backend: &wayland_client::backend::Backend,
-    msg: wayland_client::backend::protocol::Message<wayland_client::backend::ObjectId>,
+    msg: wayland_client::backend::protocol::Message<wayland_client::backend::ObjectId, std::os::fd::OwnedFd>,
   ) -> Option<std::sync::Arc<dyn ObjectData>> {
     if wl_buffer::EVT_RELEASE_OPCODE == msg.opcode.into() {
       self.busy.store(false, Ordering::Relaxed);

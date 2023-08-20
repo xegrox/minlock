@@ -12,8 +12,8 @@ use seat::{AppSeat, DispatchKeyEvents};
 use wayland_client::{EventQueue, delegate_dispatch};
 use wayland_client::protocol::wl_keyboard;
 use wayland_client::protocol::wl_seat::WlSeat;
-use wayland_protocols_wlr::input_inhibitor::v1::client::{zwlr_input_inhibit_manager_v1, zwlr_input_inhibitor_v1};
 use xkbcommon::xkb::keysyms;
+use std::os::fd::AsRawFd;
 use std::sync::{Mutex, Arc};
 use std::thread;
 use std::time::Duration;
@@ -68,14 +68,12 @@ fn main() {
   let wl_shm = gm.instantiate::<WlShm>(1).unwrap();
   let wl_seat = gm.instantiate::<WlSeat>(7).unwrap();
   let zwlr_layer_shell = gm.instantiate::<zwlr_layer_shell_v1::ZwlrLayerShellV1>(1).unwrap();
-  let zwlr_input_inhibit_manager_v1 = gm.instantiate::<zwlr_input_inhibit_manager_v1::ZwlrInputInhibitManagerV1>(1).unwrap();
   
   let event_queue = connection.new_event_queue::<AppState>();
   let qh = &event_queue.handle();
   
   // Keyboard events
-  zwlr_input_inhibit_manager_v1.get_inhibitor(qh, ()).unwrap();
-  wl_seat.get_keyboard(qh, ()).unwrap();
+  wl_seat.get_keyboard(qh, ());
 
   // Create surface
   let surface = AppSurface::new(&wl_shm, &wl_compositor, &wl_subcompositor);
@@ -86,7 +84,7 @@ fn main() {
     "lockscreen".to_string(),
     qh,
     ()
-  ).unwrap();
+  );
   layer_surface.set_anchor(
     zwlr_layer_surface_v1::Anchor::Top |
     zwlr_layer_surface_v1::Anchor::Bottom |
@@ -108,9 +106,9 @@ fn main() {
     auth_sender
   };
 
-  let event_queue_fd = event_queue.prepare_read().unwrap().connection_fd();
-  let event_queue_source = calloop::generic::Generic::new(event_queue_fd, calloop::Interest::READ, calloop::Mode::Level);
-  main_loop.handle().insert_source(event_queue_source, |_event, _metadata, (queue, state)| {
+  let wayland_fd = connection.prepare_read().unwrap().connection_fd().as_raw_fd();
+  let wayland_source = calloop::generic::Generic::new(wayland_fd, calloop::Interest::READ, calloop::Mode::Level);
+  main_loop.handle().insert_source(wayland_source, |_event, _metadata, (queue, state)| {
     queue.prepare_read().unwrap().read().unwrap();
     queue.dispatch_pending(state).unwrap();
     Ok(calloop::PostAction::Continue)
@@ -207,17 +205,4 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for AppState {
         state.running = false;
       }
   }
-}
-
-impl Dispatch::<zwlr_input_inhibitor_v1::ZwlrInputInhibitorV1, ()> for AppState {
-    fn event(
-        _state: &mut Self,
-        _proxy: &zwlr_input_inhibitor_v1::ZwlrInputInhibitorV1,
-        _event: <zwlr_input_inhibitor_v1::ZwlrInputInhibitorV1 as Proxy>::Event,
-        _data: &(),
-        _conn: &Connection,
-        _qhandle: &QueueHandle<Self>,
-    ) {
-        // Do nothing
-    }
 }

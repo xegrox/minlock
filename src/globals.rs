@@ -6,7 +6,7 @@ use wayland_client::protocol::wl_shm::WlShm;
 use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
 use wayland_client::{Connection, Dispatch, Proxy, QueueHandle};
 use wayland_client::protocol::wl_registry::{self, WlRegistry};
-use wayland_protocols_wlr::input_inhibitor::v1::client::zwlr_input_inhibit_manager_v1::ZwlrInputInhibitManagerV1;
+use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_manager_v1::ExtSessionLockManagerV1;
 use wayland_protocols_wlr::layer_shell::v1::client::zwlr_layer_shell_v1::ZwlrLayerShellV1;
 
 use crate::utils::DummyObjectData;
@@ -27,7 +27,7 @@ impl GlobalsManager {
   pub fn new(connection: &Connection) -> Self {
     let wl_display = connection.display();
     let mut queue = connection.new_event_queue::<Self>();
-    let wl_registry = wl_display.get_registry(&queue.handle(), ()).unwrap();
+    let wl_registry = wl_display.get_registry(&queue.handle(), ());
     let mut gm = Self {globals: HashMap::new(), wl_registry};
     queue.roundtrip(&mut gm).unwrap();
     gm
@@ -58,7 +58,7 @@ impl GlobalsManager {
     U: Send + Sync + 'static {
     if let Some(GlobalEntry { name, version }) = self.globals.get(I::NAME) {
       if min_ver <= *version {
-        Ok(self.wl_registry.bind::<I, U, D>(*name, *version, qh, udata).unwrap())
+        Ok(self.wl_registry.bind::<I, U, D>(*name, *version, qh, udata))
       } else {
         Err(InstantiateError::InvalidVersion(*version))
       }
@@ -117,9 +117,9 @@ impl InterfaceName for ZwlrLayerShellV1 {
 }
 
 impl InterfaceName for WlSeat {
-    const NAME: &'static str = "wl_seat";
+  const NAME: &'static str = "wl_seat";
 }
 
-impl InterfaceName for ZwlrInputInhibitManagerV1 {
-    const NAME: &'static str = "zwlr_input_inhibit_manager_v1";
+impl InterfaceName for ExtSessionLockManagerV1 {
+  const NAME: &'static str = "ext_session_lock_manager_v1";
 }

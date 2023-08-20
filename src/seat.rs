@@ -1,3 +1,4 @@
+use std::os::fd::AsRawFd;
 use wayland_client::{Dispatch, protocol::wl_keyboard, WEnum};
 use xkbcommon::xkb::{Keymap, KEYMAP_FORMAT_TEXT_V1, Context, ffi::XKB_CONTEXT_NO_FLAGS, KEYMAP_COMPILE_NO_FLAGS, Keysym};
 
@@ -27,7 +28,7 @@ where
           if format == wl_keyboard::KeymapFormat::XkbV1 {
             let context = Context::new(XKB_CONTEXT_NO_FLAGS);
             let keymap = unsafe {
-              Keymap::new_from_fd(&context, fd, size as usize, KEYMAP_FORMAT_TEXT_V1, KEYMAP_COMPILE_NO_FLAGS)
+              Keymap::new_from_fd(&context, fd.as_raw_fd(), size as usize, KEYMAP_FORMAT_TEXT_V1, KEYMAP_COMPILE_NO_FLAGS)
             }.unwrap().unwrap();
             state.as_mut().xkb_state = Some(xkbcommon::xkb::State::new(&keymap));
           } else {

@@ -60,7 +60,7 @@ impl ObjectData for DummyObjectData {
     fn event(
         self: Arc<Self>,
         _backend: &wayland_client::backend::Backend,
-        _msg: wayland_client::backend::protocol::Message<wayland_client::backend::ObjectId>,
+        _msg: wayland_client::backend::protocol::Message<wayland_client::backend::ObjectId, std::os::fd::OwnedFd>,
     ) -> Option<Arc<dyn ObjectData>> {
         // Do nothing
         None

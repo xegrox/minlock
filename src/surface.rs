@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use calloop::LoopHandle;
-use wayland_backend::client::ObjectData;
+use wayland_client::backend::ObjectData;
 use wayland_client::Proxy;
 use wayland_client::protocol::wl_shm;
 use wayland_client::protocol::wl_surface;
