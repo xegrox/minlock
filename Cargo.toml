@@ -9,7 +9,7 @@ edition = "2021"
 calloop = "0.10.1"
 memfd = "0.6.1"
 memmap = "0.7.0"
-wayland-client = "=0.30.2"
+wayland-client = { version = "=0.30.2", features = ["calloop"] }
 wayland-protocols-wlr = { version = "=0.1.0", features = ["client"] }
 cairo-rs = "0.15.12"
 polonius-the-crab = "0.3.1"

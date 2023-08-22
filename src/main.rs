@@ -9,11 +9,10 @@ mod password;
 use password::PasswordBuffer;
 use render::indicator::IndicatorState;
 use seat::{AppSeat, DispatchKeyEvents};
-use wayland_client::{EventQueue, delegate_dispatch};
+use wayland_client::{delegate_dispatch, WaylandSource};
 use wayland_client::protocol::wl_keyboard;
 use wayland_client::protocol::wl_seat::WlSeat;
 use xkbcommon::xkb::keysyms;
-use std::os::fd::AsRawFd;
 use std::sync::{Mutex, Arc};
 use std::thread;
 use std::time::Duration;
@@ -26,7 +25,7 @@ use wayland_client::protocol::wl_shm::WlShm;
 use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_surface_v1, zwlr_layer_shell_v1};
 
 pub struct AppState {
-  loop_handle: calloop::LoopHandle<'static, (EventQueue::<AppState>, Self)>,
+  loop_handle: calloop::LoopHandle<'static, Self>,
   running: bool,
   seat: AppSeat,
   surface: AppSurface,
@@ -39,7 +38,7 @@ impl AppState {
     self.surface.push_state(
       surface_state,
       self.loop_handle.clone(),
-      |s| &mut s.1.surface
+      |s| &mut s.surface
     );
   }
 
@@ -69,8 +68,8 @@ fn main() {
   let wl_seat = gm.instantiate::<WlSeat>(7).unwrap();
   let zwlr_layer_shell = gm.instantiate::<zwlr_layer_shell_v1::ZwlrLayerShellV1>(1).unwrap();
   
-  let event_queue = connection.new_event_queue::<AppState>();
-  let qh = &event_queue.handle();
+  let wayland_queue = connection.new_event_queue::<AppState>();
+  let qh = &wayland_queue.handle();
   
   // Keyboard events
   wl_seat.get_keyboard(qh, ());
@@ -96,8 +95,8 @@ fn main() {
   surface.base_surface().commit();
 
   let (auth_sender, auth_channel) = calloop::channel::channel::<bool>();
-  let mut main_loop = calloop::EventLoop::<'static, (EventQueue::<AppState>, AppState)>::try_new().expect("Failed to initialize event loop");
-  let state = AppState {
+  let mut main_loop = calloop::EventLoop::<'static, AppState>::try_new().expect("Failed to initialize event loop");
+  let mut state = AppState {
     loop_handle: main_loop.handle(),
     running: true,
     seat: AppSeat::new(),
@@ -106,20 +105,18 @@ fn main() {
     auth_sender
   };
 
-  let wayland_fd = connection.prepare_read().unwrap().connection_fd().as_raw_fd();
-  let wayland_source = calloop::generic::Generic::new(wayland_fd, calloop::Interest::READ, calloop::Mode::Level);
-  main_loop.handle().insert_source(wayland_source, |_event, _metadata, (queue, state)| {
-    queue.prepare_read().unwrap().read().unwrap();
-    queue.dispatch_pending(state).unwrap();
-    Ok(calloop::PostAction::Continue)
-  }).unwrap();
+  // Wayland event queue
+  let wayland_source = WaylandSource::new(wayland_queue).unwrap();
+  wayland_source.insert(main_loop.handle()).unwrap();
 
-  main_loop.handle().insert_source(calloop::timer::Timer::immediate(), |event, _metadata, (_queue, state)| {
+  // Periodic clock damaging
+  main_loop.handle().insert_source(calloop::timer::Timer::immediate(), |event, _metadata, state| {
     state.surface.render_clock();
     calloop::timer::TimeoutAction::ToInstant(event + Duration::from_secs(1))
   }).unwrap();
 
-  main_loop.handle().insert_source(auth_channel, |event, _, (_, state)| {
+  // Auth channel
+  main_loop.handle().insert_source(auth_channel, |event, _, state| {
     if let calloop::channel::Event::Msg(success) = event {
       if success {
         state.running = false;
@@ -132,10 +129,10 @@ fn main() {
   let signal = main_loop.get_signal();
   main_loop.run(
     Duration::from_secs(1), 
-    &mut (event_queue, state),
-    |(queue, state)| {
+    &mut state,
+    |state| {
       if !state.running {signal.stop();}
-      queue.flush().unwrap();
+      connection.flush().unwrap();
     }
   ).expect("Error during event loop");
 
@@ -156,7 +153,7 @@ impl DispatchKeyEvents for AppState {
     let mut push_state = |indicator_state: IndicatorState| state.surface.push_state(
       indicator_state, 
       state.loop_handle.clone(),
-      |s| &mut s.1.surface
+      |s| &mut s.surface
     );
     match keysym {
       keysyms::KEY_Escape => {

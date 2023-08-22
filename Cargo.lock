@@ -879,6 +879,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "489c9654770f674fc7e266b3c579f4053d7551df0ceb392f153adb1f9ed06ac8"
 dependencies = [
  "bitflags",
+ "calloop",
  "nix 0.26.2",
  "wayland-backend",
  "wayland-scanner",
