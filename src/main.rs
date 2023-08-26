@@ -1,14 +1,15 @@
 mod shm;
-mod globals;
 mod render;
 mod surface;
 mod seat;
-mod utils;
 mod password;
 
 use password::PasswordBuffer;
 use render::indicator::IndicatorState;
 use seat::{AppSeat, DispatchKeyEvents};
+use wayland_client::globals::{registry_queue_init, GlobalListContents};
+use wayland_client::{delegate_dispatch, WaylandSource, delegate_noop};
+use wayland_client::protocol::{wl_keyboard, wl_registry, wl_compositor, wl_subcompositor, wl_shm, wl_seat, wl_surface, wl_subsurface};
 use wayland_client::{delegate_dispatch, WaylandSource};
 use wayland_client::protocol::wl_keyboard;
 use wayland_client::protocol::wl_seat::WlSeat;
@@ -16,12 +17,8 @@ use xkbcommon::xkb::keysyms;
 use std::sync::{Mutex, Arc};
 use std::thread;
 use std::time::Duration;
-use globals::GlobalsManager;
 use surface::AppSurface;
 use wayland_client::{Proxy, Dispatch, Connection, QueueHandle};
-use wayland_client::protocol::wl_compositor::WlCompositor;
-use wayland_client::protocol::wl_subcompositor::WlSubcompositor;
-use wayland_client::protocol::wl_shm::WlShm;
 use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_surface_v1, zwlr_layer_shell_v1};
 
 pub struct AppState {
@@ -59,14 +56,26 @@ impl AppState {
 
 fn main() {
   let connection = Connection::connect_to_env().unwrap();
-  let gm = GlobalsManager::new(&connection);
-  
+  let (globals, wl_queue) = registry_queue_init::<AppState>(&connection).unwrap();
+  let qh = wl_queue.handle();
+
   // Bind globals
+  let wl_compositor: wl_compositor::WlCompositor = globals.bind(&qh, 4..=4, ()).unwrap();
+  let wl_subcompositor: wl_subcompositor::WlSubcompositor = globals.bind(&qh, 1..=1, ()).unwrap();
+  let wl_shm: wl_shm::WlShm = globals.bind(&qh, 1..=1, ()).unwrap();
+  let wl_seat: wl_seat::WlSeat = globals.bind(&qh, 7..=7, ()).unwrap();
+  let zwlr_layer_shell: zwlr_layer_shell_v1::ZwlrLayerShellV1 = globals.bind(&qh, 1..=1, ()).unwrap();
   let wl_compositor = gm.instantiate::<WlCompositor>(4).unwrap();
   let wl_subcompositor = gm.instantiate::<WlSubcompositor>(1).unwrap();
   let wl_shm = gm.instantiate::<WlShm>(1).unwrap();
   let wl_seat = gm.instantiate::<WlSeat>(7).unwrap();
   let zwlr_layer_shell = gm.instantiate::<zwlr_layer_shell_v1::ZwlrLayerShellV1>(1).unwrap();
+
+  delegate_noop!(AppState: wl_compositor::WlCompositor);
+  delegate_noop!(AppState: wl_subcompositor::WlSubcompositor);
+  delegate_noop!(AppState: ignore wl_shm::WlShm); // Ignore advertise format events
+  delegate_noop!(AppState: ignore wl_seat::WlSeat); // Ignore capabilities changes
+  delegate_noop!(AppState: zwlr_layer_shell_v1::ZwlrLayerShellV1);
   
   let wayland_queue = connection.new_event_queue::<AppState>();
   let qh = &wayland_queue.handle();
@@ -75,7 +84,9 @@ fn main() {
   wl_seat.get_keyboard(qh, ());
 
   // Create surface
-  let surface = AppSurface::new(&wl_shm, &wl_compositor, &wl_subcompositor);
+  let surface = AppSurface::new(&qh, &wl_shm, &wl_compositor, &wl_subcompositor);
+  delegate_noop!(AppState: ignore wl_surface::WlSurface);
+  delegate_noop!(AppState: ignore wl_subsurface::WlSubsurface);
   let layer_surface = zwlr_layer_shell.get_layer_surface(
     surface.base_surface(),
     None,
@@ -202,4 +213,17 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for AppState {
         state.running = false;
       }
   }
+}
+
+impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppState {
+    fn event(
+        state: &mut Self,
+        proxy: &wl_registry::WlRegistry,
+        event: <wl_registry::WlRegistry as Proxy>::Event,
+        data: &GlobalListContents,
+        conn: &Connection,
+        qhandle: &QueueHandle<Self>,
+    ) {
+        // TODO: handle new outputs
+    }
 }

@@ -1,20 +1,20 @@
-use std::sync::Arc;
 use std::time::Duration;
 use calloop::LoopHandle;
-use wayland_client::backend::ObjectData;
-use wayland_client::Proxy;
-use wayland_client::protocol::wl_shm;
-use wayland_client::protocol::wl_surface;
-use wayland_client::protocol::wl_subsurface;
-use wayland_client::protocol::wl_compositor;
-use wayland_client::protocol::wl_subcompositor;
+use wayland_client::Dispatch;
+use wayland_client::QueueHandle;
+use wayland_client::protocol::{
+  wl_shm,
+  wl_surface,
+  wl_subsurface,
+  wl_compositor,
+  wl_subcompositor
+};
 
 use crate::render::background::draw_background;
 use crate::render::clock::draw_clock;
 use crate::render::indicator::IndicatorState;
 use crate::render::indicator::draw_indicator;
 use crate::shm::slot::BufferSlotPool;
-use crate::utils::DummyObjectData;
 
 struct AppSubsurface {
   surface: wl_surface::WlSurface,
@@ -22,15 +22,18 @@ struct AppSubsurface {
 }
 
 impl AppSubsurface {
-  fn create(
+  fn new<D>(
+    qh: &QueueHandle<D>,
     wl_compositor: &wl_compositor::WlCompositor,
     wl_subcompositor: &wl_subcompositor::WlSubcompositor,
-    parent: &wl_surface::WlSurface,
-    data: Arc::<dyn ObjectData>
-  ) -> Self {
-    let surface = wl_compositor.send_constructor::<wl_surface::WlSurface>(wl_compositor::Request::CreateSurface {}, data.clone()).unwrap();
-    let subsurface_req = wl_subcompositor::Request::GetSubsurface { surface: surface.clone(), parent: parent.clone() };
-    let subsurface = wl_subcompositor.send_constructor::<wl_subsurface::WlSubsurface>(subsurface_req, data.clone()).unwrap();
+    parent: &wl_surface::WlSurface
+  ) -> Self
+  where
+    D: 'static + Dispatch<wl_surface::WlSurface, ()>,
+    D: 'static + Dispatch<wl_subsurface::WlSubsurface, ()>
+  {
+    let surface = wl_compositor.create_surface(qh, ());
+    let subsurface = wl_subcompositor.get_subsurface(&surface, parent, qh, ());
     Self {
       surface,
       subsurface
@@ -51,15 +54,19 @@ pub struct AppSurface {
 }
 
 impl AppSurface {
-  pub fn new(
+  pub fn new<D>(
+    qh: &QueueHandle<D>,
     wl_shm: &wl_shm::WlShm,
     wl_compositor: &wl_compositor::WlCompositor,
     wl_subcompositor: &wl_subcompositor::WlSubcompositor
-  ) -> Self {
-    let dummy_data = Arc::new(DummyObjectData);
-    let bg_surface = wl_compositor.send_constructor::<wl_surface::WlSurface>(wl_compositor::Request::CreateSurface {}, dummy_data.clone()).unwrap();
-    let clock_surface = AppSubsurface::create(wl_compositor, wl_subcompositor, &bg_surface, dummy_data.clone());
-    let indicator_surface = AppSubsurface::create(wl_compositor, wl_subcompositor, &bg_surface, dummy_data.clone());
+  ) -> Self
+  where
+    D: 'static + Dispatch<wl_surface::WlSurface, ()>,
+    D: 'static + Dispatch<wl_subsurface::WlSubsurface, ()>
+  {
+    let bg_surface = wl_compositor.create_surface(qh, ());
+    let clock_surface = AppSubsurface::new(qh, wl_compositor, wl_subcompositor, &bg_surface);
+    let indicator_surface = AppSubsurface::new(qh, wl_compositor, wl_subcompositor, &bg_surface);
     Self {
       pool: BufferSlotPool::create(4096, wl_shm),
       width: 0,
