@@ -1,11 +1,10 @@
+mod application;
 mod auth;
 mod render;
 mod seat;
 mod shm;
-mod state;
 mod surface;
 
-use render::indicator::IndicatorState;
 use seat::{AppSeat, DispatchKeyEvents};
 use std::time::Duration;
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
@@ -18,13 +17,13 @@ use wayland_protocols::ext::session_lock::v1::client::{
 };
 use xkbcommon::xkb::keysyms;
 
+use crate::application::{AppState, Application};
 use crate::auth::Authenticator;
-use crate::state::AppState;
 use crate::surface::AppSurface;
 
 fn main() {
   let connection = Connection::connect_to_env().unwrap();
-  let (globals, wl_queue) = registry_queue_init::<AppState>(&connection).unwrap();
+  let (globals, wl_queue) = registry_queue_init::<Application>(&connection).unwrap();
   let qh = wl_queue.handle();
 
   // Bind globals
@@ -35,12 +34,12 @@ fn main() {
   let ext_session_lock_mgr: ext_session_lock_manager_v1::ExtSessionLockManagerV1 =
     globals.bind(&qh, 1..=1, ()).unwrap();
 
-  delegate_noop!(AppState: wl_compositor::WlCompositor);
-  delegate_noop!(AppState: wl_subcompositor::WlSubcompositor);
-  delegate_noop!(AppState: ignore wl_shm::WlShm); // Ignore advertise format events
-  delegate_noop!(AppState: ext_session_lock_manager_v1::ExtSessionLockManagerV1);
+  delegate_noop!(Application: wl_compositor::WlCompositor);
+  delegate_noop!(Application: wl_subcompositor::WlSubcompositor);
+  delegate_noop!(Application: ignore wl_shm::WlShm); // Ignore advertise format events
+  delegate_noop!(Application: ext_session_lock_manager_v1::ExtSessionLockManagerV1);
 
-  let wayland_queue = connection.new_event_queue::<AppState>();
+  let wayland_queue = connection.new_event_queue::<Application>();
   let qh = &wayland_queue.handle();
 
   // Request lock
@@ -49,7 +48,7 @@ fn main() {
 
   // Bind keyboard events
   let seat = AppSeat::from(&qh, wl_seat);
-  delegate_dispatch_seat!(AppState);
+  delegate_dispatch_seat!(Application);
 
   // Create surface for each output
   let surfaces = globals
@@ -72,18 +71,19 @@ fn main() {
       }
     })
     .collect();
-  delegate_dispatch_surface!(AppState);
-  delegate_noop!(AppState: ignore wl_output::WlOutput);
+  delegate_dispatch_surface!(Application);
+  delegate_noop!(Application: ignore wl_output::WlOutput);
 
   let (auth_sender, auth_channel) = calloop::channel::channel::<bool>();
   let mut main_loop =
-    calloop::EventLoop::<'static, AppState>::try_new().expect("Failed to initialize event loop");
-  let mut state = AppState {
+    calloop::EventLoop::<'static, Application>::try_new().expect("Failed to initialize event loop");
+  let mut app = Application {
     loop_handle: main_loop.handle(),
     running: true,
     locked: false,
     seat,
     surfaces,
+    state: AppState::Idle,
     password: String::with_capacity(12),
     authenticator: Authenticator::new(),
     auth_sender,
@@ -103,8 +103,8 @@ fn main() {
     .handle()
     .insert_source(
       calloop::timer::Timer::immediate(),
-      |event, _metadata, state| {
-        for surface in state.surfaces.iter_mut() {
+      |event, _metadata, app| {
+        for surface in app.surfaces.iter_mut() {
           surface.render_clock()
         }
         calloop::timer::TimeoutAction::ToInstant(event + Duration::from_secs(1))
@@ -115,15 +115,13 @@ fn main() {
   // Auth channel
   main_loop
     .handle()
-    .insert_source(auth_channel, |event, _, state| {
+    .insert_source(auth_channel, |event, _, app| {
       if let calloop::channel::Event::Msg(success) = event {
         if success {
-          state.running = false;
+          app.running = false;
         } else {
-          for surface in state.surfaces.iter_mut() {
-            surface.render_indicator(IndicatorState::Invalid);
-            state.password.clear();
-          }
+          app.push_state(AppState::Invalid);
+          app.password.clear();
         }
       }
     })
@@ -131,12 +129,12 @@ fn main() {
 
   let signal = main_loop.get_signal();
   main_loop
-    .run(Duration::from_secs(1), &mut state, |state| {
-      if !state.running {
-        if state.locked {
-          state.ext_session_lock.unlock_and_destroy()
+    .run(Duration::from_secs(1), &mut app, |app| {
+      if !app.running {
+        if app.locked {
+          app.ext_session_lock.unlock_and_destroy()
         } else {
-          state.ext_session_lock.destroy()
+          app.ext_session_lock.destroy()
         }
         connection.flush().unwrap();
         signal.stop();
@@ -146,27 +144,27 @@ fn main() {
     .expect("Error during event loop");
 }
 
-impl DispatchKeyEvents for AppState {
-  fn event(state: &mut Self, keysym: xkbcommon::xkb::Keysym, codepoint: u32) {
+impl DispatchKeyEvents for Application {
+  fn event(app: &mut Self, keysym: xkbcommon::xkb::Keysym, codepoint: u32) {
     match keysym {
       keysyms::KEY_KP_Enter | keysyms::KEY_Return => {
-        state.push_indicator_state(IndicatorState::Verifying);
-        let auth_sender = state.auth_sender.clone();
-        state
+        app.push_state(AppState::Verifying);
+        let auth_sender = app.auth_sender.clone();
+        app
           .authenticator
-          .authenticate(state.password.clone(), auth_sender);
+          .authenticate(app.password.clone(), auth_sender);
       }
       keysyms::KEY_Delete | keysyms::KEY_BackSpace => {
-        if state.password.pop().is_some() {
-          state.push_indicator_state(IndicatorState::Input(state.password.len() as u32));
+        if app.password.pop().is_some() {
+          app.push_state(AppState::Input);
         }
       }
       _ => {
         if codepoint != 0 {
           let ch = char::from_u32(codepoint);
           if let Some(ch) = ch {
-            state.password.push(ch);
-            state.push_indicator_state(IndicatorState::Input(state.password.len() as u32));
+            app.password.push(ch);
+            app.push_state(AppState::Input);
           }
         }
       }
@@ -175,10 +173,10 @@ impl DispatchKeyEvents for AppState {
 }
 
 impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::WlSurface>
-  for AppState
+  for Application
 {
   fn event(
-    state: &mut Self,
+    app: &mut Self,
     proxy: &ext_session_lock_surface_v1::ExtSessionLockSurfaceV1,
     event: <ext_session_lock_surface_v1::ExtSessionLockSurfaceV1 as Proxy>::Event,
     data: &wl_surface::WlSurface,
@@ -192,7 +190,7 @@ impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::
     } = event
     {
       proxy.ack_configure(serial);
-      let surface = state
+      let surface = app
         .surfaces
         .iter_mut()
         .find(|surface| surface.as_ref().id() == data.id());
@@ -204,9 +202,9 @@ impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::
   }
 }
 
-impl Dispatch<ext_session_lock_v1::ExtSessionLockV1, ()> for AppState {
+impl Dispatch<ext_session_lock_v1::ExtSessionLockV1, ()> for Application {
   fn event(
-    state: &mut Self,
+    app: &mut Self,
     _proxy: &ext_session_lock_v1::ExtSessionLockV1,
     event: <ext_session_lock_v1::ExtSessionLockV1 as Proxy>::Event,
     _data: &(),
@@ -214,14 +212,14 @@ impl Dispatch<ext_session_lock_v1::ExtSessionLockV1, ()> for AppState {
     _qhandle: &QueueHandle<Self>,
   ) {
     if let ext_session_lock_v1::Event::Finished = event {
-      state.running = false;
+      app.running = false;
     } else if let ext_session_lock_v1::Event::Locked = event {
-      state.locked = true;
+      app.locked = true;
     }
   }
 }
 
-impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for AppState {
+impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Application {
   fn event(
     _state: &mut Self,
     _proxy: &wl_registry::WlRegistry,

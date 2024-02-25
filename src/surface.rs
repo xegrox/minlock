@@ -6,8 +6,7 @@ use wayland_client::QueueHandle;
 
 use crate::render::background::draw_background;
 use crate::render::clock::draw_clock;
-use crate::render::indicator::draw_indicator;
-use crate::render::indicator::IndicatorState;
+use crate::render::indicator::{draw_indicator, INDICATOR_BLOCK_COUNT, RGB};
 use crate::shm::slot::BufferSlotPool;
 
 pub struct AppSurface {
@@ -62,7 +61,7 @@ impl AppSurface {
       self.clock_height = height;
       self.render_bg();
       self.render_clock();
-      self.render_indicator(IndicatorState::Idle);
+      self.render_indicator_idle();
     }
   }
 
@@ -97,8 +96,57 @@ impl AppSurface {
     self.base_surface.commit();
   }
 
-  pub fn render_indicator(&mut self, state: IndicatorState) {
-    let buffer = draw_indicator(&mut self.pool, state);
+  pub fn render_indicator_verifying(&mut self) {
+    self.render_indicator(vec![RGB {
+      r: 0.6,
+      g: 0.5,
+      b: 0.2,
+    }])
+  }
+
+  pub fn render_indicator_invalid(&mut self) {
+    self.render_indicator(vec![RGB {
+      r: 0.7,
+      g: 0.3,
+      b: 0.3,
+    }])
+  }
+
+  pub fn render_indicator_idle(&mut self) {
+    self.render_indicator(vec![RGB {
+      r: 0.2,
+      g: 0.2,
+      b: 0.2,
+    }])
+  }
+
+  pub fn render_indicator_input(&mut self, len: usize) {
+    if len == 0 {
+      self.render_indicator(vec![RGB {
+        r: 0.2,
+        g: 0.5,
+        b: 0.5,
+      }])
+    } else {
+      let mut block_colors = vec![
+        RGB {
+          r: 0.2,
+          g: 0.2,
+          b: 0.2
+        };
+        INDICATOR_BLOCK_COUNT
+      ];
+      block_colors[(len - 1) % INDICATOR_BLOCK_COUNT] = RGB {
+        r: 0.4,
+        g: 0.4,
+        b: 0.4,
+      };
+      self.render_indicator(block_colors)
+    }
+  }
+
+  fn render_indicator(&mut self, block_colors: Vec<RGB>) {
+    let buffer = draw_indicator(&mut self.pool, block_colors);
     buffer.attach_to_surface(&self.indicator_surface);
     self.indicator_surface.damage(0, 0, i32::MAX, i32::MAX);
     self.indicator_surface.commit();
