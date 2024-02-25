@@ -1,8 +1,10 @@
 use std::time::Duration;
-use wayland_client::protocol::{wl_compositor, wl_subcompositor, wl_shm};
+use wayland_client::protocol::{wl_compositor, wl_shm, wl_subcompositor};
 use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_v1;
 
-use crate::{seat::AppSeat, surface::AppSurface, render::indicator::IndicatorState, auth::Authenticator};
+use crate::{
+  auth::Authenticator, render::indicator::IndicatorState, seat::AppSeat, surface::AppSurface,
+};
 
 pub struct AppState {
   pub loop_handle: calloop::LoopHandle<'static, Self>,
@@ -28,7 +30,6 @@ impl AsMut<AppSeat> for AppState {
 }
 
 impl AppState {
-
   // pub fn authenticate(&mut self) {
   //   let password = Arc::clone(&self.password);
   //   let auth_sender = self.auth_sender.clone();
@@ -51,12 +52,20 @@ impl AppState {
       self.loop_handle.remove(timer);
     }
     if !matches!(indicator_state, IndicatorState::Verifying) {
-      self.indicator_idle_timer = Some(self.loop_handle.insert_source(calloop::timer::Timer::from_duration(Duration::from_secs(2)), |_, _, state| {
-        for surface in state.surfaces.iter_mut() {
-          surface.render_indicator(IndicatorState::Idle);
-        }
-        calloop::timer::TimeoutAction::Drop
-      }).unwrap());
+      self.indicator_idle_timer = Some(
+        self
+          .loop_handle
+          .insert_source(
+            calloop::timer::Timer::from_duration(Duration::from_secs(2)),
+            |_, _, state| {
+              for surface in state.surfaces.iter_mut() {
+                surface.render_indicator(IndicatorState::Idle);
+              }
+              calloop::timer::TimeoutAction::Drop
+            },
+          )
+          .unwrap(),
+      );
     }
   }
 }

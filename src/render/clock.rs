@@ -1,8 +1,8 @@
-use cairo::{FontOptions, HintStyle, Antialias};
+use cairo::{Antialias, FontOptions, HintStyle};
 use chrono::Local;
 use polonius_the_crab::{polonius, polonius_return};
 
-use crate::shm::slot::{BufferSlotPool, BufferSlot};
+use crate::shm::slot::{BufferSlot, BufferSlotPool};
 
 pub fn draw_clock(mut pool: &mut BufferSlotPool, width: u32, height: u32) -> &mut BufferSlot {
   let (min_width, expected_height) = polonius!(|pool| -> &'polonius mut BufferSlot {
@@ -13,8 +13,9 @@ pub fn draw_clock(mut pool: &mut BufferSlotPool, width: u32, height: u32) -> &mu
         cairo::Format::ARgb32,
         buffer.width().try_into().unwrap(),
         buffer.height().try_into().unwrap(),
-        buffer.stride().try_into().unwrap()
-      ).unwrap()
+        buffer.stride().try_into().unwrap(),
+      )
+      .unwrap()
     };
     let text = Local::now().format("%H:%M:%S").to_string();
 

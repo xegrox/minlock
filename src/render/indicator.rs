@@ -1,11 +1,11 @@
-use crate::shm::slot::{BufferSlotPool, BufferSlot};
+use crate::shm::slot::{BufferSlot, BufferSlotPool};
 
 #[derive(Copy, Clone)]
 pub enum IndicatorState {
   Input(u32),
   Verifying,
   Invalid,
-  Idle
+  Idle,
 }
 
 pub fn draw_indicator(pool: &mut BufferSlotPool, state: IndicatorState) -> &mut BufferSlot {
@@ -21,8 +21,9 @@ pub fn draw_indicator(pool: &mut BufferSlotPool, state: IndicatorState) -> &mut 
       cairo::Format::ARgb32,
       buffer.width().try_into().unwrap(),
       buffer.height().try_into().unwrap(),
-      buffer.stride().try_into().unwrap()
-    ).unwrap()
+      buffer.stride().try_into().unwrap(),
+    )
+    .unwrap()
   };
   let context = cairo::Context::new(&surface).unwrap();
   let mut position = None;
@@ -32,15 +33,15 @@ pub fn draw_indicator(pool: &mut BufferSlotPool, state: IndicatorState) -> &mut 
         context.set_source_rgb(0.2, 0.5, 0.5);
       } else {
         context.set_source_rgb(0.2, 0.2, 0.2);
-        position = Some((len-1) % block_count);
+        position = Some((len - 1) % block_count);
       }
-    },
+    }
     IndicatorState::Verifying => {
       context.set_source_rgb(0.6, 0.5, 0.2);
-    },
+    }
     IndicatorState::Invalid => {
       context.set_source_rgb(0.7, 0.3, 0.3);
-    },
+    }
     IndicatorState::Idle => {
       context.set_source_rgb(0.2, 0.2, 0.2);
     }

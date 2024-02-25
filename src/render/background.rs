@@ -1,4 +1,4 @@
-use crate::shm::slot::{BufferSlotPool, BufferSlot};
+use crate::shm::slot::{BufferSlot, BufferSlotPool};
 
 pub fn draw_background(pool: &mut BufferSlotPool, width: u32, height: u32) -> &mut BufferSlot {
   let (buffer, data) = pool.get_next_buffer(width, height);
@@ -8,8 +8,9 @@ pub fn draw_background(pool: &mut BufferSlotPool, width: u32, height: u32) -> &m
       cairo::Format::ARgb32,
       buffer.width().try_into().unwrap(),
       buffer.height().try_into().unwrap(),
-      buffer.stride().try_into().unwrap()
-    ).unwrap()
+      buffer.stride().try_into().unwrap(),
+    )
+    .unwrap()
   };
   let context = cairo::Context::new(&surface).unwrap();
   context.set_source_rgb(0.0, 0.0, 0.0);

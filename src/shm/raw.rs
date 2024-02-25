@@ -1,9 +1,9 @@
-use std::{fs::File, sync::Arc};
-use std::os::unix::prelude::AsRawFd;
 use memfd::MemfdOptions;
-use memmap::{MmapOptions, MmapMut};
-use wayland_client::protocol::{wl_shm, wl_shm_pool, wl_buffer};
-use wayland_client::{WEnum, Proxy, backend::ObjectData};
+use memmap::{MmapMut, MmapOptions};
+use std::os::unix::prelude::AsRawFd;
+use std::{fs::File, sync::Arc};
+use wayland_client::protocol::{wl_buffer, wl_shm, wl_shm_pool};
+use wayland_client::{backend::ObjectData, Proxy, WEnum};
 
 pub struct RawPool {
   len: usize,
@@ -14,13 +14,26 @@ pub struct RawPool {
 
 impl RawPool {
   pub fn create(len: usize, wl_shm: &wl_shm::WlShm) -> Self {
-    let mem_file = MemfdOptions::default().create("minlock_buffer").unwrap().into_file();
+    let mem_file = MemfdOptions::default()
+      .create("minlock_buffer")
+      .unwrap()
+      .into_file();
     let fd = mem_file.as_raw_fd();
     mem_file.set_len(len as u64).unwrap();
-    let request = wl_shm::Request::CreatePool { fd, size: len as i32 };
-    let wl_shm_pool = wl_shm.send_constructor(request, Arc::new(DummyObjectData)).unwrap();
+    let request = wl_shm::Request::CreatePool {
+      fd,
+      size: len as i32,
+    };
+    let wl_shm_pool = wl_shm
+      .send_constructor(request, Arc::new(DummyObjectData))
+      .unwrap();
     let mmap = unsafe { MmapOptions::new().map_mut(&mem_file).unwrap() };
-    Self {len, mem_file, mmap, pool: wl_shm_pool}
+    Self {
+      len,
+      mem_file,
+      mmap,
+      pool: wl_shm_pool,
+    }
   }
 
   pub fn resize(&mut self, size: usize) {
@@ -39,14 +52,24 @@ impl RawPool {
     height: i32,
     stride: i32,
     format: wl_shm::Format,
-    data: Arc<dyn ObjectData + 'static>
+    data: Arc<dyn ObjectData + 'static>,
   ) -> wl_buffer::WlBuffer {
-    let request = wl_shm_pool::Request::CreateBuffer { offset, width, height, stride, format: WEnum::Value(format)};
+    let request = wl_shm_pool::Request::CreateBuffer {
+      offset,
+      width,
+      height,
+      stride,
+      format: WEnum::Value(format),
+    };
     self.pool.send_constructor(request, data).unwrap()
   }
 
-  pub fn mmap(&mut self) -> &mut MmapMut {&mut self.mmap}
-  pub fn len(&self) -> usize {self.len}
+  pub fn mmap(&mut self) -> &mut MmapMut {
+    &mut self.mmap
+  }
+  pub fn len(&self) -> usize {
+    self.len
+  }
 }
 
 impl Drop for RawPool {
@@ -57,16 +80,19 @@ impl Drop for RawPool {
 
 struct DummyObjectData;
 impl ObjectData for DummyObjectData {
-    fn event(
-        self: Arc<Self>,
-        _backend: &wayland_client::backend::Backend,
-        _msg: wayland_client::backend::protocol::Message<wayland_client::backend::ObjectId, std::os::fd::OwnedFd>,
-    ) -> Option<Arc<dyn ObjectData>> {
-        // Do nothing
-        None
-    }
+  fn event(
+    self: Arc<Self>,
+    _backend: &wayland_client::backend::Backend,
+    _msg: wayland_client::backend::protocol::Message<
+      wayland_client::backend::ObjectId,
+      std::os::fd::OwnedFd,
+    >,
+  ) -> Option<Arc<dyn ObjectData>> {
+    // Do nothing
+    None
+  }
 
-    fn destroyed(&self, _object_id: wayland_client::backend::ObjectId) {
-        // Do nothing
-    }
+  fn destroyed(&self, _object_id: wayland_client::backend::ObjectId) {
+    // Do nothing
+  }
 }

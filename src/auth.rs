@@ -1,17 +1,19 @@
 use std::sync::{Arc, Mutex};
-use users::{get_current_uid, get_user_by_uid};
 use std::thread;
+use users::{get_current_uid, get_user_by_uid};
 
 pub struct Authenticator {
   username: String,
-  pam_auth: Arc<Mutex<pam::Authenticator<'static, pam::PasswordConv>>>
+  pam_auth: Arc<Mutex<pam::Authenticator<'static, pam::PasswordConv>>>,
 }
 
 impl Authenticator {
   pub fn new() -> Self {
     let user = get_user_by_uid(get_current_uid()).unwrap();
     let username = user.name().to_owned().into_string().unwrap();
-    let pam_auth = Arc::new(Mutex::new(pam::Authenticator::with_password("lockscreen").expect("Failed to init PAM client")));
+    let pam_auth = Arc::new(Mutex::new(
+      pam::Authenticator::with_password("lockscreen").expect("Failed to init PAM client"),
+    ));
     Self { username, pam_auth }
   }
 
