@@ -93,7 +93,15 @@ pub trait DispatchKeyEvents {
 #[macro_export]
 macro_rules! delegate_dispatch_seat {
   ($l: ty) => {
+
+    impl AsMut<AppSeat> for $l {
+      fn as_mut(&mut self) -> &mut AppSeat {
+        &mut self.seat
+      }
+    }
+
     wayland_client::delegate_noop!($l: ignore wayland_client::protocol::wl_seat::WlSeat);
     wayland_client::delegate_dispatch!($l: [wayland_client::protocol::wl_keyboard::WlKeyboard: ()] => AppSeat);
+
   };
 }

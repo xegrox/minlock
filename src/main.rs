@@ -6,6 +6,7 @@ mod shm;
 mod surface;
 
 use seat::{AppSeat, DispatchKeyEvents};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
 use wayland_client::protocol::{
@@ -18,8 +19,12 @@ use wayland_protocols::ext::session_lock::v1::client::{
 use xkbcommon::xkb::keysyms;
 
 use crate::application::{AppState, Application};
-use crate::auth::Authenticator;
 use crate::surface::AppSurface;
+
+struct AppProcess {
+  running: bool,
+  locked: bool,
+}
 
 fn main() {
   let connection = Connection::connect_to_env().unwrap();
@@ -39,11 +44,15 @@ fn main() {
   delegate_noop!(Application: ignore wl_shm::WlShm); // Ignore advertise format events
   delegate_noop!(Application: ext_session_lock_manager_v1::ExtSessionLockManagerV1);
 
+  let process = Arc::new(Mutex::new(AppProcess {
+    running: true,
+    locked: false,
+  }));
   let wayland_queue = connection.new_event_queue::<Application>();
   let qh = &wayland_queue.handle();
 
   // Request lock
-  let ext_session_lock = ext_session_lock_mgr.lock(&qh, ());
+  let ext_session_lock = ext_session_lock_mgr.lock(&qh, Arc::clone(&process));
   connection.roundtrip().unwrap(); // In case finished event sent by compositor
 
   // Bind keyboard events
@@ -74,25 +83,10 @@ fn main() {
   delegate_dispatch_surface!(Application);
   delegate_noop!(Application: ignore wl_output::WlOutput);
 
-  let (auth_sender, auth_channel) = calloop::channel::channel::<bool>();
   let mut main_loop =
     calloop::EventLoop::<'static, Application>::try_new().expect("Failed to initialize event loop");
-  let mut app = Application {
-    loop_handle: main_loop.handle(),
-    running: true,
-    locked: false,
-    seat,
-    surfaces,
-    state: AppState::Idle,
-    password: String::with_capacity(12),
-    authenticator: Authenticator::new(),
-    auth_sender,
-    indicator_idle_timer: None,
-    ext_session_lock,
-    wl_shm,
-    wl_compositor,
-    wl_subcompositor,
-  };
+
+  let mut app = Application::new(main_loop.handle(), seat, surfaces);
 
   // Wayland event queue
   let wayland_source = WaylandSource::new(wayland_queue).unwrap();
@@ -112,29 +106,22 @@ fn main() {
     )
     .unwrap();
 
-  // Auth channel
-  main_loop
-    .handle()
-    .insert_source(auth_channel, |event, _, app| {
-      if let calloop::channel::Event::Msg(success) = event {
-        if success {
-          app.running = false;
-        } else {
-          app.push_state(AppState::Invalid);
-          app.password.clear();
-        }
-      }
-    })
-    .unwrap();
-
   let signal = main_loop.get_signal();
   main_loop
     .run(Duration::from_secs(1), &mut app, |app| {
-      if !app.running {
-        if app.locked {
-          app.ext_session_lock.unlock_and_destroy()
+      let process = Arc::clone(&process);
+      let mut process = process.lock().unwrap();
+
+      // Exit once authenticated
+      if matches!(app.current_state(), AppState::Success) {
+        process.running = false;
+      }
+      // Destroy lock
+      if !process.running {
+        if process.locked {
+          ext_session_lock.unlock_and_destroy();
         } else {
-          app.ext_session_lock.destroy()
+          ext_session_lock.destroy();
         }
         connection.flush().unwrap();
         signal.stop();
@@ -148,23 +135,16 @@ impl DispatchKeyEvents for Application {
   fn event(app: &mut Self, keysym: xkbcommon::xkb::Keysym, codepoint: u32) {
     match keysym {
       keysyms::KEY_KP_Enter | keysyms::KEY_Return => {
-        app.push_state(AppState::Verifying);
-        let auth_sender = app.auth_sender.clone();
-        app
-          .authenticator
-          .authenticate(app.password.clone(), auth_sender);
+        app.authenticate();
       }
       keysyms::KEY_Delete | keysyms::KEY_BackSpace => {
-        if app.password.pop().is_some() {
-          app.push_state(AppState::Input);
-        }
+        app.password_pop();
       }
       _ => {
         if codepoint != 0 {
           let ch = char::from_u32(codepoint);
           if let Some(ch) = ch {
-            app.password.push(ch);
-            app.push_state(AppState::Input);
+            app.password_push(ch);
           }
         }
       }
@@ -202,19 +182,20 @@ impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::
   }
 }
 
-impl Dispatch<ext_session_lock_v1::ExtSessionLockV1, ()> for Application {
+impl Dispatch<ext_session_lock_v1::ExtSessionLockV1, Arc<Mutex<AppProcess>>> for Application {
   fn event(
-    app: &mut Self,
+    _app: &mut Self,
     _proxy: &ext_session_lock_v1::ExtSessionLockV1,
     event: <ext_session_lock_v1::ExtSessionLockV1 as Proxy>::Event,
-    _data: &(),
+    data: &Arc<Mutex<AppProcess>>,
     _conn: &Connection,
     _qhandle: &QueueHandle<Self>,
   ) {
+    let mut process = data.lock().unwrap();
     if let ext_session_lock_v1::Event::Finished = event {
-      app.running = false;
+      process.running = false;
     } else if let ext_session_lock_v1::Event::Locked = event {
-      app.locked = true;
+      process.locked = true;
     }
   }
 }
