@@ -1,6 +1,4 @@
-use wayland_client::protocol::{
-  wl_compositor, wl_shm, wl_subcompositor, wl_subsurface, wl_surface,
-};
+use wayland_client::protocol::{wl_compositor, wl_shm, wl_subcompositor, wl_subsurface, wl_surface};
 use wayland_client::Dispatch;
 use wayland_client::QueueHandle;
 
@@ -37,8 +35,7 @@ impl AppSurface {
     let clock_surface = wl_compositor.create_surface(qh, ());
     let clock_subsurface = wl_subcompositor.get_subsurface(&clock_surface, &base_surface, qh, ());
     let indicator_surface = wl_compositor.create_surface(qh, ());
-    let indicator_subsurface =
-      wl_subcompositor.get_subsurface(&indicator_surface, &base_surface, qh, ());
+    let indicator_subsurface = wl_subcompositor.get_subsurface(&indicator_surface, &base_surface, qh, ());
     Self {
       pool: BufferSlotPool::create(4096, wl_shm),
       width: 0,
@@ -97,50 +94,23 @@ impl AppSurface {
   }
 
   pub fn render_indicator_verifying(&mut self) {
-    self.render_indicator(vec![RGB {
-      r: 0.6,
-      g: 0.5,
-      b: 0.2,
-    }])
+    self.render_indicator(vec![RGB { r: 0.6, g: 0.5, b: 0.2 }])
   }
 
   pub fn render_indicator_invalid(&mut self) {
-    self.render_indicator(vec![RGB {
-      r: 0.7,
-      g: 0.3,
-      b: 0.3,
-    }])
+    self.render_indicator(vec![RGB { r: 0.7, g: 0.3, b: 0.3 }])
   }
 
   pub fn render_indicator_idle(&mut self) {
-    self.render_indicator(vec![RGB {
-      r: 0.2,
-      g: 0.2,
-      b: 0.2,
-    }])
+    self.render_indicator(vec![RGB { r: 0.2, g: 0.2, b: 0.2 }])
   }
 
   pub fn render_indicator_input(&mut self, len: usize) {
     if len == 0 {
-      self.render_indicator(vec![RGB {
-        r: 0.2,
-        g: 0.5,
-        b: 0.5,
-      }])
+      self.render_indicator(vec![RGB { r: 0.2, g: 0.5, b: 0.5 }])
     } else {
-      let mut block_colors = vec![
-        RGB {
-          r: 0.2,
-          g: 0.2,
-          b: 0.2
-        };
-        INDICATOR_BLOCK_COUNT
-      ];
-      block_colors[(len - 1) % INDICATOR_BLOCK_COUNT] = RGB {
-        r: 0.4,
-        g: 0.4,
-        b: 0.4,
-      };
+      let mut block_colors = vec![RGB { r: 0.2, g: 0.2, b: 0.2 }; INDICATOR_BLOCK_COUNT];
+      block_colors[(len - 1) % INDICATOR_BLOCK_COUNT] = RGB { r: 0.4, g: 0.4, b: 0.4 };
       self.render_indicator(block_colors)
     }
   }

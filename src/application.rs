@@ -26,11 +26,7 @@ pub enum AppState {
 }
 
 impl Application {
-  pub fn new(
-    loop_handle: calloop::LoopHandle<'static, Self>,
-    seat: AppSeat,
-    surfaces: Vec<AppSurface>,
-  ) -> Application {
+  pub fn new(loop_handle: calloop::LoopHandle<'static, Self>, seat: AppSeat, surfaces: Vec<AppSurface>) -> Application {
     // Auth channel
     let (auth_sender, auth_channel) = calloop::channel::channel::<bool>();
     loop_handle

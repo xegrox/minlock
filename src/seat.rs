@@ -2,8 +2,7 @@ use std::os::fd::AsRawFd;
 use wayland_client::protocol::{wl_keyboard, wl_seat};
 use wayland_client::{Dispatch, QueueHandle, WEnum};
 use xkbcommon::xkb::{
-  ffi::XKB_CONTEXT_NO_FLAGS, Context, Keymap, Keysym, KEYMAP_COMPILE_NO_FLAGS,
-  KEYMAP_FORMAT_TEXT_V1,
+  ffi::XKB_CONTEXT_NO_FLAGS, Context, Keymap, Keysym, KEYMAP_COMPILE_NO_FLAGS, KEYMAP_FORMAT_TEXT_V1,
 };
 
 pub struct AppSeat {
@@ -57,9 +56,7 @@ where
         panic!("Unknown keymap format");
       }
     } else if let wl_keyboard::Event::Key {
-      key,
-      state: key_state,
-      ..
+      key, state: key_state, ..
     } = event
     {
       if let WEnum::Value(key_state) = key_state {

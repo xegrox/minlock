@@ -9,9 +9,7 @@ use seat::{AppSeat, DispatchKeyEvents};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
-use wayland_client::protocol::{
-  wl_compositor, wl_output, wl_registry, wl_seat, wl_shm, wl_subcompositor, wl_surface,
-};
+use wayland_client::protocol::{wl_compositor, wl_output, wl_registry, wl_seat, wl_shm, wl_subcompositor, wl_surface};
 use wayland_client::{delegate_noop, Connection, Dispatch, Proxy, QueueHandle, WaylandSource};
 use wayland_protocols::ext::session_lock::v1::client::{
   ext_session_lock_manager_v1, ext_session_lock_surface_v1, ext_session_lock_v1,
@@ -68,12 +66,7 @@ fn main() {
       if global.interface == wl_output::WlOutput::interface().name {
         let wl_output: wl_output::WlOutput = globals.bind(&qh, 4..=4, ()).unwrap();
         let surface = AppSurface::create(&qh, &wl_shm, &wl_compositor, &wl_subcompositor);
-        ext_session_lock.get_lock_surface(
-          surface.as_ref(),
-          &wl_output,
-          &qh,
-          surface.as_ref().clone(),
-        );
+        ext_session_lock.get_lock_surface(surface.as_ref(), &wl_output, &qh, surface.as_ref().clone());
         Some(surface)
       } else {
         None
@@ -83,8 +76,7 @@ fn main() {
   delegate_dispatch_surface!(Application);
   delegate_noop!(Application: ignore wl_output::WlOutput);
 
-  let mut main_loop =
-    calloop::EventLoop::<'static, Application>::try_new().expect("Failed to initialize event loop");
+  let mut main_loop = calloop::EventLoop::<'static, Application>::try_new().expect("Failed to initialize event loop");
 
   let mut app = Application::new(main_loop.handle(), seat, surfaces);
 
@@ -95,15 +87,12 @@ fn main() {
   // Periodic clock redraw
   main_loop
     .handle()
-    .insert_source(
-      calloop::timer::Timer::immediate(),
-      |event, _metadata, app| {
-        for surface in app.surfaces.iter_mut() {
-          surface.render_clock()
-        }
-        calloop::timer::TimeoutAction::ToInstant(event + Duration::from_secs(1))
-      },
-    )
+    .insert_source(calloop::timer::Timer::immediate(), |event, _metadata, app| {
+      for surface in app.surfaces.iter_mut() {
+        surface.render_clock()
+      }
+      calloop::timer::TimeoutAction::ToInstant(event + Duration::from_secs(1))
+    })
     .unwrap();
 
   let signal = main_loop.get_signal();
@@ -159,9 +148,7 @@ impl DispatchKeyEvents for Application {
   }
 }
 
-impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::WlSurface>
-  for Application
-{
+impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::WlSurface> for Application {
   fn event(
     app: &mut Self,
     proxy: &ext_session_lock_surface_v1::ExtSessionLockSurfaceV1,
@@ -170,12 +157,7 @@ impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::
     _conn: &Connection,
     _qhandle: &QueueHandle<Self>,
   ) {
-    if let ext_session_lock_surface_v1::Event::Configure {
-      serial,
-      width,
-      height,
-    } = event
-    {
+    if let ext_session_lock_surface_v1::Event::Configure { serial, width, height } = event {
       proxy.ack_configure(serial);
       let surface = app
         .surfaces

@@ -12,8 +12,7 @@ pub struct RGB {
 pub fn draw_indicator(pool: &mut BufferSlotPool, block_colors: Vec<RGB>) -> &mut BufferSlot {
   let block_size = 10;
   let block_spacing = 30;
-  let indicator_width =
-    (INDICATOR_BLOCK_COUNT * block_size + (INDICATOR_BLOCK_COUNT - 1) * block_spacing) as u32;
+  let indicator_width = (INDICATOR_BLOCK_COUNT * block_size + (INDICATOR_BLOCK_COUNT - 1) * block_spacing) as u32;
   let indicator_height = block_size as u32;
   let (buffer, data) = pool.get_next_buffer(indicator_width, indicator_height);
   let surface = unsafe {

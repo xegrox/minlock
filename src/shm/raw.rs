@@ -14,19 +14,11 @@ pub struct RawPool {
 
 impl RawPool {
   pub fn create(len: usize, wl_shm: &wl_shm::WlShm) -> Self {
-    let mem_file = MemfdOptions::default()
-      .create("minlock_buffer")
-      .unwrap()
-      .into_file();
+    let mem_file = MemfdOptions::default().create("minlock_buffer").unwrap().into_file();
     let fd = mem_file.as_raw_fd();
     mem_file.set_len(len as u64).unwrap();
-    let request = wl_shm::Request::CreatePool {
-      fd,
-      size: len as i32,
-    };
-    let wl_shm_pool = wl_shm
-      .send_constructor(request, Arc::new(DummyObjectData))
-      .unwrap();
+    let request = wl_shm::Request::CreatePool { fd, size: len as i32 };
+    let wl_shm_pool = wl_shm.send_constructor(request, Arc::new(DummyObjectData)).unwrap();
     let mmap = unsafe { MmapOptions::new().map_mut(&mem_file).unwrap() };
     Self {
       len,
@@ -83,10 +75,7 @@ impl ObjectData for DummyObjectData {
   fn event(
     self: Arc<Self>,
     _backend: &wayland_client::backend::Backend,
-    _msg: wayland_client::backend::protocol::Message<
-      wayland_client::backend::ObjectId,
-      std::os::fd::OwnedFd,
-    >,
+    _msg: wayland_client::backend::protocol::Message<wayland_client::backend::ObjectId, std::os::fd::OwnedFd>,
   ) -> Option<Arc<dyn ObjectData>> {
     // Do nothing
     None
