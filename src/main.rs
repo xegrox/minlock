@@ -133,6 +133,10 @@ fn main() {
 
 impl DispatchKeyEvents for Application {
   fn event(app: &mut Self, keysym: xkbcommon::xkb::Keysym, codepoint: u32) {
+    if matches!(app.current_state(), AppState::Verifying) {
+      // Block key events when verifying
+      return;
+    }
     match keysym {
       keysyms::KEY_Escape => {
         app.password_clear();
