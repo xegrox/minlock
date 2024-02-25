@@ -1,5 +1,5 @@
 use std::os::fd::AsRawFd;
-use wayland_client::protocol::{wl_keyboard, wl_seat};
+use wayland_client::protocol::{wl_keyboard, wl_pointer, wl_seat};
 use wayland_client::{Dispatch, QueueHandle, WEnum};
 use xkbcommon::xkb::{
   ffi::XKB_CONTEXT_NO_FLAGS, Context, Keymap, Keysym, KEYMAP_COMPILE_NO_FLAGS, KEYMAP_FORMAT_TEXT_V1,
@@ -13,10 +13,16 @@ impl AppSeat {
   pub fn from<D>(qh: &QueueHandle<D>, wl_seat: wl_seat::WlSeat) -> Self
   where
     D: 'static + Dispatch<wl_keyboard::WlKeyboard, ()>,
+    D: 'static + Dispatch<wl_pointer::WlPointer, ()>,
   {
     wl_seat.get_keyboard(qh, ());
+    wl_seat.get_pointer(qh, ());
     Self { xkb_state: None }
   }
+}
+
+pub trait DispatchKeyEvents {
+  fn event(state: &mut Self, keysym: Keysym, codepoint: u32);
 }
 
 impl<State> Dispatch<wl_keyboard::WlKeyboard, (), State> for AppSeat
@@ -83,8 +89,23 @@ where
   }
 }
 
-pub trait DispatchKeyEvents {
-  fn event(state: &mut Self, keysym: Keysym, codepoint: u32);
+impl<State> Dispatch<wl_pointer::WlPointer, (), State> for AppSeat
+where
+  State: Dispatch<wl_pointer::WlPointer, ()>,
+  State: AsMut<Self>,
+{
+  fn event(
+    _state: &mut State,
+    proxy: &wl_pointer::WlPointer,
+    event: <wl_pointer::WlPointer as wayland_client::Proxy>::Event,
+    _data: &(),
+    _conn: &wayland_client::Connection,
+    _qhandle: &QueueHandle<State>,
+  ) {
+    if let wl_pointer::Event::Enter { serial, .. } = event {
+      proxy.set_cursor(serial, None, 0, 0);
+    }
+  }
 }
 
 #[macro_export]
@@ -99,6 +120,6 @@ macro_rules! delegate_dispatch_seat {
 
     wayland_client::delegate_noop!($l: ignore wayland_client::protocol::wl_seat::WlSeat);
     wayland_client::delegate_dispatch!($l: [wayland_client::protocol::wl_keyboard::WlKeyboard: ()] => AppSeat);
-
+    wayland_client::delegate_dispatch!($l: [wayland_client::protocol::wl_pointer::WlPointer: ()] => AppSeat);
   };
 }

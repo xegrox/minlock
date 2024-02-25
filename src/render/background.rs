@@ -13,7 +13,7 @@ pub fn draw_background(pool: &mut BufferSlotPool, width: u32, height: u32) -> &m
     .unwrap()
   };
   let context = cairo::Context::new(&surface).unwrap();
-  context.set_source_rgb(0.0, 0.0, 0.0);
+  context.set_source_rgb(0.0157, 0.0118, 0.0431);
   context.paint().unwrap();
   buffer
 }

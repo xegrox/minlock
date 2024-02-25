@@ -111,19 +111,21 @@ impl AppSurface {
     } else {
       let strength = ((len - 1) / INDICATOR_BLOCK_COUNT) as f64;
       let pos = (len - 1) % INDICATOR_BLOCK_COUNT;
-      let block_colors = (0..INDICATOR_BLOCK_COUNT).map(|i| {
-        let mut color = if i < pos {
-          RGB { r: 0.3, g: 0.3, b: 0.3 }
-        } else if i == pos {
-          RGB { r: 0.5, g: 0.5, b: 0.5 }
-        } else {
-          RGB { r: 0.2, g: 0.2, b: 0.2 }
-        };
-        color.r += 0.1 * strength;
-        color.g += 0.1 * strength;
-        color.b += 0.1 * strength;
-        color
-      }).collect();
+      let block_colors = (0..INDICATOR_BLOCK_COUNT)
+        .map(|i| {
+          let mut color = if i < pos {
+            RGB { r: 0.3, g: 0.3, b: 0.3 }
+          } else if i == pos {
+            RGB { r: 0.5, g: 0.5, b: 0.5 }
+          } else {
+            RGB { r: 0.2, g: 0.2, b: 0.2 }
+          };
+          color.r += 0.1 * strength;
+          color.g += 0.1 * strength;
+          color.b += 0.1 * strength;
+          color
+        })
+        .collect();
       self.render_indicator(block_colors)
     }
   }
