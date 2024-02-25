@@ -30,6 +30,8 @@ pub fn draw_clock(mut pool: &mut BufferSlotPool, width: u32, height: u32) -> &mu
     // Text height is always constant while width always changes
     // Accept if buffer width is longer than actual text width
     if buffer.width() >= text_width && buffer.height() == text_height {
+      context.set_source_rgb(0.0157, 0.0118, 0.0431);
+      context.paint().unwrap();
       context.set_source_rgb(1.0, 1.0, 1.0);
       let mut font_options = FontOptions::new().unwrap();
       font_options.set_hint_style(HintStyle::Full);
