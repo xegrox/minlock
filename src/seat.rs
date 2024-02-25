@@ -1,5 +1,6 @@
 use std::os::fd::AsRawFd;
-use wayland_client::{Dispatch, protocol::wl_keyboard, WEnum};
+use wayland_client::protocol::{wl_keyboard, wl_seat};
+use wayland_client::{Dispatch, WEnum, QueueHandle};
 use xkbcommon::xkb::{Keymap, KEYMAP_FORMAT_TEXT_V1, Context, ffi::XKB_CONTEXT_NO_FLAGS, KEYMAP_COMPILE_NO_FLAGS, Keysym};
 
 pub struct AppSeat {
@@ -7,7 +8,11 @@ pub struct AppSeat {
 }
 
 impl AppSeat {
-  pub fn new() -> Self {Self { xkb_state: None }}
+  pub fn from<D>(qh: &QueueHandle<D>, wl_seat: wl_seat::WlSeat) -> Self
+  where D: 'static + Dispatch<wl_keyboard::WlKeyboard, ()> {
+    wl_seat.get_keyboard(qh, ());
+    Self { xkb_state: None }
+  }
 }
 
 impl<State> Dispatch<wl_keyboard::WlKeyboard, (), State> for AppSeat
@@ -61,4 +66,12 @@ pub trait DispatchKeyEvents {
     keysym: Keysym,
     codepoint: u32
   );
+}
+
+#[macro_export]
+macro_rules! delegate_dispatch_seat {
+  ($l: ty) => {
+    wayland_client::delegate_noop!($l: ignore wayland_client::protocol::wl_seat::WlSeat);
+    wayland_client::delegate_dispatch!($l: [wayland_client::protocol::wl_keyboard::WlKeyboard: ()] => AppSeat);
+  };
 }
