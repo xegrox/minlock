@@ -59,6 +59,11 @@ impl Application {
     }
   }
 
+  pub fn password_clear(&mut self) {
+    self.password.clear();
+    self.push_state(AppState::Input);
+  }
+
   pub fn password_push(&mut self, ch: char) {
     self.password.push(ch);
     self.push_state(AppState::Input);

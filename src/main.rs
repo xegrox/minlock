@@ -134,6 +134,9 @@ fn main() {
 impl DispatchKeyEvents for Application {
   fn event(app: &mut Self, keysym: xkbcommon::xkb::Keysym, codepoint: u32) {
     match keysym {
+      keysyms::KEY_Escape => {
+        app.password_clear();
+      }
       keysyms::KEY_KP_Enter | keysyms::KEY_Return => {
         app.authenticate();
       }
