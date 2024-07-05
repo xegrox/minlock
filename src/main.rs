@@ -10,7 +10,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
 use wayland_client::protocol::{wl_compositor, wl_output, wl_registry, wl_seat, wl_shm, wl_subcompositor, wl_surface};
-use wayland_client::{delegate_noop, Connection, Dispatch, Proxy, QueueHandle, WaylandSource};
+use wayland_client::{delegate_noop, Connection, Dispatch, Proxy, QueueHandle};
+use calloop_wayland_source::WaylandSource;
 use wayland_protocols::ext::session_lock::v1::client::{
   ext_session_lock_manager_v1, ext_session_lock_surface_v1, ext_session_lock_v1,
 };
@@ -46,8 +47,6 @@ fn main() {
     running: true,
     locked: false,
   }));
-  let wayland_queue = connection.new_event_queue::<Application>();
-  let qh = &wayland_queue.handle();
 
   // Request lock
   let ext_session_lock = ext_session_lock_mgr.lock(&qh, Arc::clone(&process));
@@ -81,7 +80,7 @@ fn main() {
   let mut app = Application::new(main_loop.handle(), seat, surfaces);
 
   // Wayland event queue
-  let wayland_source = WaylandSource::new(wayland_queue).unwrap();
+  let wayland_source = WaylandSource::new(connection.clone(), wl_queue);
   wayland_source.insert(main_loop.handle()).unwrap();
 
   // Periodic clock redraw
