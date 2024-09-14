@@ -1,5 +1,7 @@
 # minlock
 
+![crates.io](https://img.shields.io/crates/v/minlock.svg)
+
 Minimal lockscreen for Wayland compositors implementing the ext-session-lock-v1 protocol.
 
 <img src="Screenshot.png?raw=true"/>
