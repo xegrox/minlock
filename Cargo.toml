@@ -1,9 +1,8 @@
 [package]
 name = "minlock"
+description = "Minimal lockscreen for Wayland"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 calloop = "0.13.0"
@@ -19,3 +18,5 @@ xkbcommon = "0.5.0"
 pam = "0.7.0"
 users = "0.11.0"
 wayland-protocols = { version = "=0.32.2", features = ["client", "staging"] }
+clap = { version = "4.5.17", features = ["derive"] }
+hex_color = "3.0.0"

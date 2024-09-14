@@ -16,7 +16,10 @@ impl RawPool {
   pub fn create(len: usize, wl_shm: &wl_shm::WlShm) -> Self {
     let mem_file = MemfdOptions::default().create("minlock_buffer").unwrap().into_file();
     mem_file.set_len(len as u64).unwrap();
-    let request = wl_shm::Request::CreatePool { fd: mem_file.as_fd(), size: len as i32 };
+    let request = wl_shm::Request::CreatePool {
+      fd: mem_file.as_fd(),
+      size: len as i32,
+    };
     let wl_shm_pool = wl_shm.send_constructor(request, Arc::new(DummyObjectData)).unwrap();
     let mmap = unsafe { MmapOptions::new().map_mut(&mem_file).unwrap() };
     Self {

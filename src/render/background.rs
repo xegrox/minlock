@@ -1,6 +1,9 @@
-use crate::shm::slot::{BufferSlot, BufferSlotPool};
+use crate::{
+  args::Color,
+  shm::slot::{BufferSlot, BufferSlotPool},
+};
 
-pub fn draw_background(pool: &mut BufferSlotPool, width: u32, height: u32) -> &mut BufferSlot {
+pub fn draw_background(pool: &mut BufferSlotPool, width: u32, height: u32, color: Color) -> &mut BufferSlot {
   let (buffer, data) = pool.get_next_buffer(width, height);
   let surface = unsafe {
     cairo::ImageSurface::create_for_data_unsafe(
@@ -13,7 +16,7 @@ pub fn draw_background(pool: &mut BufferSlotPool, width: u32, height: u32) -> &m
     .unwrap()
   };
   let context = cairo::Context::new(&surface).unwrap();
-  context.set_source_rgb(0.0157, 0.0118, 0.0431);
+  context.set_source_rgb(color.r, color.g, color.b);
   context.paint().unwrap();
   buffer
 }

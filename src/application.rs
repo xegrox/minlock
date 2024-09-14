@@ -1,9 +1,11 @@
+use crate::args::Args;
 use crate::auth::Authenticator;
 use crate::seat::AppSeat;
 use crate::surface::AppSurface;
 use std::time::Duration;
 
 pub struct Application {
+  pub args: Args,
   pub locked: bool,
   pub seat: AppSeat,
   pub surfaces: Vec<AppSurface>,
@@ -26,7 +28,12 @@ pub enum AppState {
 }
 
 impl Application {
-  pub fn new(loop_handle: calloop::LoopHandle<'static, Self>, seat: AppSeat, surfaces: Vec<AppSurface>) -> Application {
+  pub fn new(
+    args: Args,
+    loop_handle: calloop::LoopHandle<'static, Self>,
+    seat: AppSeat,
+    surfaces: Vec<AppSurface>,
+  ) -> Application {
     // Auth channel
     let (auth_sender, auth_channel) = calloop::channel::channel::<bool>();
     loop_handle
@@ -43,6 +50,7 @@ impl Application {
       .unwrap();
 
     Application {
+      args,
       loop_handle,
       locked: false,
       seat,
@@ -86,11 +94,24 @@ impl Application {
     self.state = state;
     for surface in self.surfaces.iter_mut() {
       match state {
-        AppState::Success => surface.render_indicator_idle(),
-        AppState::Idle => surface.render_indicator_idle(),
-        AppState::Invalid => surface.render_indicator_invalid(),
-        AppState::Verifying => surface.render_indicator_verifying(),
-        AppState::Input => surface.render_indicator_input(self.password.len()),
+        AppState::Success => surface.render_indicator_full(self.args.indicator_idle_color, self.args.bg_color),
+        AppState::Idle => surface.render_indicator_full(self.args.indicator_idle_color, self.args.bg_color),
+        AppState::Invalid => surface.render_indicator_full(self.args.indicator_wrong_color, self.args.bg_color),
+        AppState::Verifying => surface.render_indicator_full(self.args.indicator_verifying_color, self.args.bg_color),
+        AppState::Input => {
+          if self.password.len() == 0 {
+            surface.render_indicator_full(self.args.indicator_clear_color, self.args.bg_color)
+          } else {
+            surface.render_indicator_input(
+              self.password.len(),
+              self.args.indicator_input_cursor_color,
+              self.args.indicator_input_cursor_increment_color,
+              self.args.indicator_input_trail_color,
+              self.args.indicator_input_trail_increment_color,
+              self.args.bg_color,
+            )
+          }
+        }
       };
     }
     // Reset idle timer
@@ -106,7 +127,7 @@ impl Application {
             |_, _, app| {
               for surface in app.surfaces.iter_mut() {
                 app.state = AppState::Idle;
-                surface.render_indicator_idle();
+                surface.render_indicator_full(app.args.indicator_idle_color, app.args.bg_color);
               }
               calloop::timer::TimeoutAction::Drop
             },

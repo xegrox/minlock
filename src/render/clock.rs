@@ -2,9 +2,18 @@ use cairo::{Antialias, FontOptions, HintStyle};
 use chrono::Local;
 use polonius_the_crab::{polonius, polonius_return};
 
-use crate::shm::slot::{BufferSlot, BufferSlotPool};
+use crate::{
+  args::Color,
+  shm::slot::{BufferSlot, BufferSlotPool},
+};
 
-pub fn draw_clock(mut pool: &mut BufferSlotPool, width: u32, height: u32) -> &mut BufferSlot {
+pub fn draw_clock(
+  mut pool: &mut BufferSlotPool,
+  width: u32,
+  height: u32,
+  text_color: Color,
+  bg_color: Color,
+) -> &mut BufferSlot {
   let (min_width, expected_height) = polonius!(|pool| -> &'polonius mut BufferSlot {
     let (buffer, data) = pool.get_next_buffer(width, height);
     let surface = unsafe {
@@ -30,9 +39,9 @@ pub fn draw_clock(mut pool: &mut BufferSlotPool, width: u32, height: u32) -> &mu
     // Text height is always constant while width always changes
     // Accept if buffer width is longer than actual text width
     if buffer.width() >= text_width && buffer.height() == text_height {
-      context.set_source_rgb(0.0157, 0.0118, 0.0431);
+      context.set_source_rgb(bg_color.r, bg_color.g, bg_color.b);
       context.paint().unwrap();
-      context.set_source_rgb(1.0, 1.0, 1.0);
+      context.set_source_rgb(text_color.r, text_color.g, text_color.b);
       let mut font_options = FontOptions::new().unwrap();
       font_options.set_hint_style(HintStyle::Full);
       font_options.set_antialias(Antialias::Subpixel);
@@ -44,5 +53,5 @@ pub fn draw_clock(mut pool: &mut BufferSlotPool, width: u32, height: u32) -> &mu
     }
     (std::cmp::max(text_width, buffer.width()), text_height)
   });
-  draw_clock(pool, min_width, expected_height)
+  draw_clock(pool, min_width, expected_height, text_color, bg_color)
 }

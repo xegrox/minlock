@@ -8,13 +8,16 @@ use xkbcommon::xkb::{
 pub struct AppSeat {
   xkb_state: Option<xkbcommon::xkb::State>,
   wl_keyboard: Option<wl_keyboard::WlKeyboard>,
-  wl_pointer: Option<wl_pointer::WlPointer>
+  wl_pointer: Option<wl_pointer::WlPointer>,
 }
 
 impl AppSeat {
-  pub fn from<D>(_qh: &QueueHandle<D>, _wl_seat: wl_seat::WlSeat) -> Self
-  {
-    Self { xkb_state: None, wl_keyboard: None, wl_pointer: None }
+  pub fn from<D>(_qh: &QueueHandle<D>, _wl_seat: wl_seat::WlSeat) -> Self {
+    Self {
+      xkb_state: None,
+      wl_keyboard: None,
+      wl_pointer: None,
+    }
   }
 }
 

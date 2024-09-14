@@ -1,23 +1,26 @@
 mod application;
+mod args;
 mod auth;
 mod render;
 mod seat;
 mod shm;
 mod surface;
 
+use calloop_wayland_source::WaylandSource;
+use clap::Parser;
 use seat::{AppSeat, DispatchKeyEvents};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use wayland_client::globals::{registry_queue_init, GlobalListContents};
 use wayland_client::protocol::{wl_compositor, wl_output, wl_registry, wl_seat, wl_shm, wl_subcompositor, wl_surface};
 use wayland_client::{delegate_noop, Connection, Dispatch, Proxy, QueueHandle};
-use calloop_wayland_source::WaylandSource;
 use wayland_protocols::ext::session_lock::v1::client::{
   ext_session_lock_manager_v1, ext_session_lock_surface_v1, ext_session_lock_v1,
 };
 use xkbcommon::xkb::keysyms;
 
 use crate::application::{AppState, Application};
+use crate::args::Args;
 use crate::surface::AppSurface;
 
 struct AppProcess {
@@ -26,6 +29,8 @@ struct AppProcess {
 }
 
 fn main() {
+  let args = Args::parse();
+
   let connection = Connection::connect_to_env().unwrap();
   let (globals, wl_queue) = registry_queue_init::<Application>(&connection).unwrap();
   let qh = wl_queue.handle();
@@ -77,7 +82,7 @@ fn main() {
 
   let mut main_loop = calloop::EventLoop::<'static, Application>::try_new().expect("Failed to initialize event loop");
 
-  let mut app = Application::new(main_loop.handle(), seat, surfaces);
+  let mut app = Application::new(args, main_loop.handle(), seat, surfaces);
 
   // Wayland event queue
   let wayland_source = WaylandSource::new(connection.clone(), wl_queue);
@@ -88,7 +93,7 @@ fn main() {
     .handle()
     .insert_source(calloop::timer::Timer::immediate(), |event, _metadata, app| {
       for surface in app.surfaces.iter_mut() {
-        surface.render_clock()
+        surface.render_clock(app.args.clock_color, app.args.bg_color);
       }
       calloop::timer::TimeoutAction::ToInstant(event + Duration::from_secs(1))
     })
@@ -164,6 +169,9 @@ impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::
         .find(|surface| surface.as_ref().id() == data.id());
       if let Some(surface) = surface {
         surface.set_dimensions(width, height);
+        surface.render_bg(app.args.bg_color);
+        surface.render_clock(app.args.clock_color, app.args.bg_color);
+        surface.render_indicator_full(app.args.indicator_idle_color, app.args.bg_color);
         surface.as_ref().commit();
       }
     }

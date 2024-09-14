@@ -1,15 +1,15 @@
-use crate::shm::slot::{BufferSlot, BufferSlotPool};
+use crate::{
+  args::Color,
+  shm::slot::{BufferSlot, BufferSlotPool},
+};
 
 pub const INDICATOR_BLOCK_COUNT: usize = 4;
 
-#[derive(Clone)]
-pub struct RGB {
-  pub r: f64,
-  pub g: f64,
-  pub b: f64,
-}
-
-pub fn draw_indicator(pool: &mut BufferSlotPool, block_colors: Vec<RGB>) -> &mut BufferSlot {
+pub fn draw_indicator(
+  pool: &mut BufferSlotPool,
+  block_colors: [Color; INDICATOR_BLOCK_COUNT],
+  bg_color: Color,
+) -> &mut BufferSlot {
   let block_size = 10;
   let block_spacing = 30;
   let indicator_width = (INDICATOR_BLOCK_COUNT * block_size + (INDICATOR_BLOCK_COUNT - 1) * block_spacing) as u32;
@@ -26,12 +26,13 @@ pub fn draw_indicator(pool: &mut BufferSlotPool, block_colors: Vec<RGB>) -> &mut
     .unwrap()
   };
   let context = cairo::Context::new(&surface).unwrap();
+  context.set_source_rgb(bg_color.r, bg_color.g, bg_color.b);
+  context.paint().unwrap();
   for i in 0..INDICATOR_BLOCK_COUNT {
     let x = i * (block_size + block_spacing);
     context.rectangle(x as f64, 0.0, block_size as f64, block_size as f64);
-    if let Some(color) = block_colors.get(i) {
-      context.set_source_rgb(color.r, color.g, color.b);
-    }
+    let color = block_colors[i];
+    context.set_source_rgb(color.r, color.g, color.b);
     context.fill().unwrap();
   }
   buffer

@@ -2,9 +2,10 @@ use wayland_client::protocol::{wl_compositor, wl_shm, wl_subcompositor, wl_subsu
 use wayland_client::Dispatch;
 use wayland_client::QueueHandle;
 
+use crate::args::Color;
 use crate::render::background::draw_background;
 use crate::render::clock::draw_clock;
-use crate::render::indicator::{draw_indicator, INDICATOR_BLOCK_COUNT, RGB};
+use crate::render::indicator::{draw_indicator, INDICATOR_BLOCK_COUNT};
 use crate::shm::slot::BufferSlotPool;
 
 pub struct AppSurface {
@@ -56,27 +57,30 @@ impl AppSurface {
       self.height = height;
       self.clock_width = width;
       self.clock_height = height;
-      self.render_bg();
-      self.render_clock();
-      self.render_indicator_idle();
     }
   }
 
-  pub fn render_bg(&mut self) {
+  pub fn render_bg(&mut self, color: Color) {
     if self.width == 0 || self.height == 0 {
       return;
     }
-    let buffer = draw_background(&mut self.pool, self.width, self.height);
+    let buffer = draw_background(&mut self.pool, self.width, self.height, color);
     buffer.attach_to_surface(&self.base_surface);
     self.base_surface.damage(0, 0, i32::MAX, i32::MAX);
     self.base_surface.commit();
   }
 
-  pub fn render_clock(&mut self) {
+  pub fn render_clock(&mut self, text_color: Color, bg_color: Color) {
     if self.clock_width == 0 || self.clock_height == 0 {
       return;
     }
-    let buffer = draw_clock(&mut self.pool, self.clock_width, self.clock_height);
+    let buffer = draw_clock(
+      &mut self.pool,
+      self.clock_width,
+      self.clock_height,
+      text_color,
+      bg_color,
+    );
     buffer.attach_to_surface(&self.clock_surface);
     self.clock_surface.damage(0, 0, i32::MAX, i32::MAX);
     self.clock_surface.commit();
@@ -93,45 +97,39 @@ impl AppSurface {
     self.base_surface.commit();
   }
 
-  pub fn render_indicator_verifying(&mut self) {
-    self.render_indicator(vec![RGB { r: 0.6, g: 0.5, b: 0.2 }])
-  }
-
-  pub fn render_indicator_invalid(&mut self) {
-    self.render_indicator(vec![RGB { r: 0.7, g: 0.3, b: 0.3 }])
-  }
-
-  pub fn render_indicator_idle(&mut self) {
-    self.render_indicator(vec![RGB { r: 0.2, g: 0.2, b: 0.2 }])
-  }
-
-  pub fn render_indicator_input(&mut self, len: usize) {
+  pub fn render_indicator_input(
+    &mut self,
+    len: usize,
+    cursor_color: Color,
+    cursor_inc_color: Color,
+    trail_color: Color,
+    trail_inc_color: Color,
+    bg_color: Color,
+  ) {
     if len == 0 {
-      self.render_indicator(vec![RGB { r: 0.2, g: 0.5, b: 0.5 }])
-    } else {
-      let strength = ((len - 1) / INDICATOR_BLOCK_COUNT) as f64;
-      let pos = (len - 1) % INDICATOR_BLOCK_COUNT;
-      let block_colors = (0..INDICATOR_BLOCK_COUNT)
-        .map(|i| {
-          let mut color = if i < pos {
-            RGB { r: 0.3, g: 0.3, b: 0.3 }
-          } else if i == pos {
-            RGB { r: 0.5, g: 0.5, b: 0.5 }
-          } else {
-            RGB { r: 0.2, g: 0.2, b: 0.2 }
-          };
-          color.r += 0.1 * strength;
-          color.g += 0.1 * strength;
-          color.b += 0.1 * strength;
-          color
-        })
-        .collect();
-      self.render_indicator(block_colors)
+      self.render_indicator_full(trail_color, bg_color);
+      return;
     }
+    let strength = (len - 1) / INDICATOR_BLOCK_COUNT;
+    let pos = (len - 1) % INDICATOR_BLOCK_COUNT;
+    let block_colors = std::array::from_fn(|i| {
+      if i < pos {
+        add_color(trail_color, trail_inc_color, strength + 1)
+      } else if i == pos {
+        add_color(cursor_color, cursor_inc_color, strength)
+      } else {
+        add_color(trail_color, trail_inc_color, strength)
+      }
+    });
+    self.render_indicator(block_colors, bg_color)
   }
 
-  fn render_indicator(&mut self, block_colors: Vec<RGB>) {
-    let buffer = draw_indicator(&mut self.pool, block_colors);
+  pub fn render_indicator_full(&mut self, color: Color, bg_color: Color) {
+    self.render_indicator([color; INDICATOR_BLOCK_COUNT], bg_color);
+  }
+
+  fn render_indicator(&mut self, block_colors: [Color; INDICATOR_BLOCK_COUNT], bg_color: Color) {
+    let buffer = draw_indicator(&mut self.pool, block_colors, bg_color);
     buffer.attach_to_surface(&self.indicator_surface);
     self.indicator_surface.damage(0, 0, i32::MAX, i32::MAX);
     self.indicator_surface.commit();
@@ -145,6 +143,14 @@ impl AppSurface {
 impl AsRef<wl_surface::WlSurface> for AppSurface {
   fn as_ref(&self) -> &wl_surface::WlSurface {
     &self.base_surface
+  }
+}
+
+fn add_color(color: Color, inc_color: Color, strength: usize) -> Color {
+  Color {
+    r: color.r + inc_color.r * strength as f64,
+    g: color.g + inc_color.g * strength as f64,
+    b: color.b + inc_color.b * strength as f64,
   }
 }
 
