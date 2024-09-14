@@ -1,8 +1,9 @@
 [package]
 name = "minlock"
 description = "Minimal lockscreen for Wayland"
-license = "MIT"
 version = "0.1.0"
+license = "MIT"
+repository = "https://gitub.com/xegrox/minlock"
 edition = "2021"
 
 [dependencies]
