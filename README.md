@@ -12,26 +12,28 @@ Via [Cargo](https://github.com/rust-lang/cargo)
 
 ## CLI Options
 
-```shell
+```
 > minlock -h
 Minimal lockscreen for Wayland
 
 Usage: minlock [OPTIONS]
 
 Options:
-  -b, --bg-color <COLOR>                                
-  -c, --clock-color <COLOR>                             
-      --indicator-idle-color <COLOR>                    
-      --indicator-wrong-color <COLOR>                   
-      --indicator-clear-color <COLOR>                   
-      --indicator-verifying-color <COLOR>               
-      --indicator-input-cursor-color <COLOR>            
-      --indicator-input-cursor-increment-color <COLOR>  
-      --indicator-input-trail-color <COLOR>             
-      --indicator-input-trail-increment-color <COLOR>   
+      --bg-color <color>                                
+      --clock-color <color>                             
+      --clock-font <font>                               
+      --clock-font-size <size>                          
+      --indicator-idle-color <color>                    
+      --indicator-wrong-color <color>                   
+      --indicator-clear-color <color>                   
+      --indicator-verifying-color <color>               
+      --indicator-input-cursor-color <color>            
+      --indicator-input-cursor-increment-color <color>  
+      --indicator-input-trail-color <color>             
+      --indicator-input-trail-increment-color <color>   
   -h, --help                                            Print help
   -V, --version                                         Print version
 
-All <COLOR> options are in RRGGBB format
+All <color> options are in RRGGBB format
 
 ```

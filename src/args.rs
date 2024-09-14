@@ -2,36 +2,42 @@ use clap::Parser;
 use hex_color::{HexColor, ParseHexColorError};
 
 #[derive(Parser)]
-#[command(version, about, long_about=None, after_help = "All <COLOR> options are in RRGGBB format")]
+#[command(version, about, long_about=None, after_help = "All <color> options are in RRGGBB format")]
 pub struct Args {
-  #[arg(short, long, value_name="COLOR", value_parser=parse_color, default_value="04030B", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="04030B", hide_default_value=true)]
   pub bg_color: Color,
 
-  #[arg(short, long, value_name="COLOR", value_parser=parse_color, default_value="FAFAFA", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="FAFAFA", hide_default_value=true)]
   pub clock_color: Color,
 
-  #[arg(long, value_name="COLOR", value_parser=parse_color, default_value="333333", hide_default_value=true)]
+  #[arg(long, value_name = "font", default_value = "sans", hide_default_value = true)]
+  pub clock_font: String,
+
+  #[arg(long, value_name = "size", default_value = "60.0", hide_default_value = true)]
+  pub clock_font_size: f64,
+
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="333333", hide_default_value=true)]
   pub indicator_idle_color: Color,
 
-  #[arg(long, value_name="COLOR", value_parser=parse_color, default_value="B24C4C", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="B24C4C", hide_default_value=true)]
   pub indicator_wrong_color: Color,
 
-  #[arg(long, value_name="COLOR", value_parser=parse_color, default_value="338080", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="338080", hide_default_value=true)]
   pub indicator_clear_color: Color,
 
-  #[arg(long, value_name="COLOR", value_parser=parse_color, default_value="998033", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="998033", hide_default_value=true)]
   pub indicator_verifying_color: Color,
 
-  #[arg(long, value_name="COLOR", value_parser=parse_color, default_value="606060", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="606060", hide_default_value=true)]
   pub indicator_input_cursor_color: Color,
 
-  #[arg(long, value_name="COLOR", value_parser=parse_color, default_value="191919", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="191919", hide_default_value=true)]
   pub indicator_input_cursor_increment_color: Color,
 
-  #[arg(long, value_name="COLOR", value_parser=parse_color, default_value="333333", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="333333", hide_default_value=true)]
   pub indicator_input_trail_color: Color,
 
-  #[arg(long, value_name="COLOR", value_parser=parse_color, default_value="191919", hide_default_value=true)]
+  #[arg(long, value_name="color", value_parser=parse_color, default_value="191919", hide_default_value=true)]
   pub indicator_input_trail_increment_color: Color,
 }
 

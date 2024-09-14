@@ -12,6 +12,8 @@ pub fn draw_clock(
   width: u32,
   height: u32,
   text_color: Color,
+  font: String,
+  font_size: f64,
   bg_color: Color,
 ) -> &mut BufferSlot {
   let (min_width, expected_height) = polonius!(|pool| -> &'polonius mut BufferSlot {
@@ -30,7 +32,8 @@ pub fn draw_clock(
 
     // Calculate expected surface height/width
     let context = cairo::Context::new(&surface).unwrap();
-    context.set_font_size(60.0);
+    context.set_font_size(font_size);
+    context.select_font_face(&font, cairo::FontSlant::Normal, cairo::FontWeight::Normal);
     let text_extents = context.text_extents(text.as_str()).unwrap();
     let font_extents = context.font_extents().unwrap();
     let text_width = text_extents.x_advance.ceil() as u32;
@@ -53,5 +56,5 @@ pub fn draw_clock(
     }
     (std::cmp::max(text_width, buffer.width()), text_height)
   });
-  draw_clock(pool, min_width, expected_height, text_color, bg_color)
+  draw_clock(pool, min_width, expected_height, text_color, font, font_size, bg_color)
 }

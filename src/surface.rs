@@ -70,7 +70,7 @@ impl AppSurface {
     self.base_surface.commit();
   }
 
-  pub fn render_clock(&mut self, text_color: Color, bg_color: Color) {
+  pub fn render_clock(&mut self, text_color: Color, font: String, font_size: f64, bg_color: Color) {
     if self.clock_width == 0 || self.clock_height == 0 {
       return;
     }
@@ -79,6 +79,8 @@ impl AppSurface {
       self.clock_width,
       self.clock_height,
       text_color,
+      font,
+      font_size,
       bg_color,
     );
     buffer.attach_to_surface(&self.clock_surface);

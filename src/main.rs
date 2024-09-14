@@ -93,7 +93,12 @@ fn main() {
     .handle()
     .insert_source(calloop::timer::Timer::immediate(), |event, _metadata, app| {
       for surface in app.surfaces.iter_mut() {
-        surface.render_clock(app.args.clock_color, app.args.bg_color);
+        surface.render_clock(
+          app.args.clock_color,
+          app.args.clock_font.clone(),
+          app.args.clock_font_size,
+          app.args.bg_color,
+        );
       }
       calloop::timer::TimeoutAction::ToInstant(event + Duration::from_secs(1))
     })
@@ -170,7 +175,12 @@ impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::
       if let Some(surface) = surface {
         surface.set_dimensions(width, height);
         surface.render_bg(app.args.bg_color);
-        surface.render_clock(app.args.clock_color, app.args.bg_color);
+        surface.render_clock(
+          app.args.clock_color,
+          app.args.clock_font.clone(),
+          app.args.clock_font_size,
+          app.args.bg_color,
+        );
         surface.render_indicator_full(app.args.indicator_idle_color, app.args.bg_color);
         surface.as_ref().commit();
       }
