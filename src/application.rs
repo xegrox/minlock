@@ -1,13 +1,20 @@
+use wayland_client::protocol::{wl_compositor, wl_shm, wl_subcompositor};
+use wayland_protocols::ext::session_lock::v1::client::ext_session_lock_v1;
+
 use crate::args::Args;
 use crate::auth::Authenticator;
+use crate::output::AppOutput;
 use crate::seat::AppSeat;
-use crate::surface::AppSurface;
 use std::time::Duration;
 
 pub struct Application {
   pub args: Args,
   pub seat: AppSeat,
-  pub surfaces: Vec<AppSurface>,
+  pub outputs: Vec<AppOutput>,
+  pub wl_shm: wl_shm::WlShm,
+  pub wl_compositor: wl_compositor::WlCompositor,
+  pub wl_subcompositor: wl_subcompositor::WlSubcompositor,
+  pub ext_session_lock: ext_session_lock_v1::ExtSessionLockV1,
 
   loop_handle: calloop::LoopHandle<'static, Self>,
   state: AppState,
@@ -31,7 +38,11 @@ impl Application {
     args: Args,
     loop_handle: calloop::LoopHandle<'static, Self>,
     seat: AppSeat,
-    surfaces: Vec<AppSurface>,
+    outputs: Vec<AppOutput>,
+    wl_shm: wl_shm::WlShm,
+    wl_compositor: wl_compositor::WlCompositor,
+    wl_subcompositor: wl_subcompositor::WlSubcompositor,
+    ext_session_lock: ext_session_lock_v1::ExtSessionLockV1
   ) -> Application {
     // Auth channel
     let (auth_sender, auth_channel) = calloop::channel::channel::<bool>();
@@ -52,12 +63,16 @@ impl Application {
       args,
       loop_handle,
       seat,
-      surfaces,
+      outputs,
       state: AppState::Idle,
       password: String::with_capacity(12),
       authenticator: Authenticator::new(),
       auth_sender,
       indicator_idle_timer: None,
+      wl_shm,
+      wl_compositor,
+      wl_subcompositor,
+      ext_session_lock
     }
   }
 
@@ -90,7 +105,7 @@ impl Application {
 
   fn push_state(&mut self, state: AppState) {
     self.state = state;
-    for surface in self.surfaces.iter_mut() {
+    for surface in self.outputs.iter_mut().map(|o| &mut o.surface) {
       match state {
         AppState::Success => surface.render_indicator_full(self.args.indicator_idle_color, self.args.bg_color),
         AppState::Idle => surface.render_indicator_full(self.args.indicator_idle_color, self.args.bg_color),
@@ -123,9 +138,9 @@ impl Application {
           .insert_source(
             calloop::timer::Timer::from_duration(Duration::from_secs(2)),
             |_, _, app| {
-              for surface in app.surfaces.iter_mut() {
+              for output in app.outputs.iter_mut() {
                 app.state = AppState::Idle;
-                surface.render_indicator_full(app.args.indicator_idle_color, app.args.bg_color);
+                output.surface.render_indicator_full(app.args.indicator_idle_color, app.args.bg_color);
               }
               calloop::timer::TimeoutAction::Drop
             },

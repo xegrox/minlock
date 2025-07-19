@@ -142,6 +142,16 @@ impl AppSurface {
   }
 }
 
+impl Drop for AppSurface {
+  fn drop(&mut self) {
+    self.indicator_subsurface.destroy();
+    self.indicator_surface.destroy();
+    self.clock_subsurface.destroy();
+    self.clock_surface.destroy();
+    self.base_surface.destroy();
+  }
+}
+
 impl AsRef<wl_surface::WlSurface> for AppSurface {
   fn as_ref(&self) -> &wl_surface::WlSurface {
     &self.base_surface

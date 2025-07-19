@@ -5,9 +5,11 @@ mod render;
 mod seat;
 mod shm;
 mod surface;
+mod output;
 
 use calloop_wayland_source::WaylandSource;
 use clap::Parser;
+use output::AppOutput;
 use seat::{AppSeat, DispatchKeyEvents};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -34,7 +36,7 @@ delegate_noop!(Application: ignore wl_shm::WlShm); // Ignore advertise format ev
 delegate_noop!(Application: ext_session_lock_manager_v1::ExtSessionLockManagerV1);
 delegate_dispatch_seat!(Application);
 delegate_dispatch_surface!(Application);
-delegate_noop!(Application: ignore wl_output::WlOutput);
+delegate_dispatch_output!(Application);
 
 fn main() {
   let args = Args::parse();
@@ -64,7 +66,7 @@ fn main() {
   let seat = AppSeat::from(&qh, wl_seat);
 
   // Create surface for each output
-  let surfaces = globals
+  let outputs = globals
     .contents()
     .clone_list()
     .iter()
@@ -72,8 +74,9 @@ fn main() {
       if global.interface == wl_output::WlOutput::interface().name {
         let wl_output: wl_output::WlOutput = globals.bind(&qh, 4..=4, ()).unwrap();
         let surface = AppSurface::create(&qh, &wl_shm, &wl_compositor, &wl_subcompositor);
-        ext_session_lock.get_lock_surface(surface.as_ref(), &wl_output, &qh, surface.as_ref().clone());
-        Some(surface)
+        let ext_session_lock_surface = ext_session_lock.get_lock_surface(surface.as_ref(), &wl_output.clone(), &qh, surface.as_ref().clone());
+        let output = AppOutput::new(wl_output, ext_session_lock_surface, surface);
+        Some(output)
       } else {
         None
       }
@@ -82,7 +85,15 @@ fn main() {
 
   let mut main_loop = calloop::EventLoop::<'static, Application>::try_new().expect("Failed to initialize event loop");
 
-  let mut app = Application::new(args, main_loop.handle(), seat, surfaces);
+  let mut app = Application::new(
+    args,
+    main_loop.handle(),
+    seat,
+    outputs,
+    wl_shm,
+    wl_compositor,
+    wl_subcompositor,
+    ext_session_lock.clone());
 
   // Wayland event queue
   let wayland_source = WaylandSource::new(connection.clone(), wl_queue);
@@ -92,8 +103,8 @@ fn main() {
   main_loop
     .handle()
     .insert_source(calloop::timer::Timer::immediate(), |event, _metadata, app| {
-      for surface in app.surfaces.iter_mut() {
-        surface.render_clock(
+      for output in app.outputs.iter_mut() {
+        output.surface.render_clock(
           app.args.clock_color,
           app.args.clock_font.clone(),
           app.args.clock_font_size,
@@ -169,8 +180,9 @@ impl Dispatch<ext_session_lock_surface_v1::ExtSessionLockSurfaceV1, wl_surface::
     if let ext_session_lock_surface_v1::Event::Configure { serial, width, height } = event {
       proxy.ack_configure(serial);
       let surface = app
-        .surfaces
+        .outputs
         .iter_mut()
+        .map(|o| &mut o.surface)
         .find(|surface| surface.as_ref().id() == data.id());
       if let Some(surface) = surface {
         surface.set_dimensions(width, height);
@@ -208,13 +220,24 @@ impl Dispatch<ext_session_lock_v1::ExtSessionLockV1, Arc<Mutex<AppProcess>>> for
 
 impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Application {
   fn event(
-    _state: &mut Self,
-    _proxy: &wl_registry::WlRegistry,
-    _event: <wl_registry::WlRegistry as Proxy>::Event,
+    state: &mut Self,
+    registry: &wl_registry::WlRegistry,
+    event: <wl_registry::WlRegistry as Proxy>::Event,
     _data: &GlobalListContents,
     _conn: &Connection,
-    _qhandle: &QueueHandle<Self>,
+    qhandle: &QueueHandle<Self>,
   ) {
-    // TODO: handle dynamically added/removed outputs
+    if let wl_registry::Event::Global { name, interface, version } = event {
+      if interface == wl_output::WlOutput::interface().name {
+        if version < 4 { panic!("require wl_output version 4 or higher") }
+        let wl_output = registry.bind(name, version, qhandle, ());
+        let surface = AppSurface::create(qhandle, &state.wl_shm, &state.wl_compositor, &state.wl_subcompositor);
+        let ext_session_lock_surface = state.ext_session_lock.get_lock_surface(&surface.as_ref().clone(), &wl_output, qhandle, surface.as_ref().clone());
+        let output = AppOutput::new(wl_output.clone(), ext_session_lock_surface, surface);
+        state.outputs.push(output);
+      }
+    } else if let wl_registry::Event::GlobalRemove { name } = event {
+      state.outputs.retain(|output| output.as_ref().id().protocol_id() != name);
+    }
   }
 }
