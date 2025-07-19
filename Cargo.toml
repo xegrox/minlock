@@ -11,14 +11,14 @@ calloop = "0.13.0"
 calloop-wayland-source = "0.3.0"
 memfd = "0.6.1"
 memmap = "0.7.0"
-wayland-client = { version = "=0.31.4" }
-wayland-protocols-wlr = { version = "=0.1.0", features = ["client"] }
+wayland-client = { version = "=0.31.10" }
+wayland-protocols-wlr = { version = "=0.3.8", features = ["client"] }
 cairo-rs = "0.15.12"
 polonius-the-crab = "0.3.1"
 chrono = "0.4.22"
 xkbcommon = "0.5.0"
 pam = "0.7.0"
 users = "0.11.0"
-wayland-protocols = { version = "=0.32.2", features = ["client", "staging"] }
+wayland-protocols = { version = "=0.32.8", features = ["client", "staging"] }
 clap = { version = "4.5.17", features = ["derive"] }
 hex_color = "3.0.0"

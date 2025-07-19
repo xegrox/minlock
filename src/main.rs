@@ -28,6 +28,14 @@ struct AppProcess {
   locked: bool,
 }
 
+delegate_noop!(Application: wl_compositor::WlCompositor);
+delegate_noop!(Application: wl_subcompositor::WlSubcompositor);
+delegate_noop!(Application: ignore wl_shm::WlShm); // Ignore advertise format events
+delegate_noop!(Application: ext_session_lock_manager_v1::ExtSessionLockManagerV1);
+delegate_dispatch_seat!(Application);
+delegate_dispatch_surface!(Application);
+delegate_noop!(Application: ignore wl_output::WlOutput);
+
 fn main() {
   let args = Args::parse();
 
@@ -43,11 +51,6 @@ fn main() {
   let ext_session_lock_mgr: ext_session_lock_manager_v1::ExtSessionLockManagerV1 =
     globals.bind(&qh, 1..=1, ()).unwrap();
 
-  delegate_noop!(Application: wl_compositor::WlCompositor);
-  delegate_noop!(Application: wl_subcompositor::WlSubcompositor);
-  delegate_noop!(Application: ignore wl_shm::WlShm); // Ignore advertise format events
-  delegate_noop!(Application: ext_session_lock_manager_v1::ExtSessionLockManagerV1);
-
   let process = Arc::new(Mutex::new(AppProcess {
     running: true,
     locked: false,
@@ -59,7 +62,6 @@ fn main() {
 
   // Bind keyboard events
   let seat = AppSeat::from(&qh, wl_seat);
-  delegate_dispatch_seat!(Application);
 
   // Create surface for each output
   let surfaces = globals
@@ -77,8 +79,6 @@ fn main() {
       }
     })
     .collect();
-  delegate_dispatch_surface!(Application);
-  delegate_noop!(Application: ignore wl_output::WlOutput);
 
   let mut main_loop = calloop::EventLoop::<'static, Application>::try_new().expect("Failed to initialize event loop");
 

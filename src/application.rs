@@ -6,7 +6,6 @@ use std::time::Duration;
 
 pub struct Application {
   pub args: Args,
-  pub locked: bool,
   pub seat: AppSeat,
   pub surfaces: Vec<AppSurface>,
 
@@ -52,7 +51,6 @@ impl Application {
     Application {
       args,
       loop_handle,
-      locked: false,
       seat,
       surfaces,
       state: AppState::Idle,
