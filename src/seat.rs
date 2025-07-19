@@ -1,4 +1,4 @@
-use std::os::fd::AsRawFd;
+use std::os::fd::IntoRawFd;
 use wayland_client::protocol::{wl_keyboard, wl_pointer, wl_seat};
 use wayland_client::{Dispatch, QueueHandle, WEnum};
 use xkbcommon::xkb::{
@@ -42,12 +42,12 @@ where
   ) {
     if let wl_seat::Event::Capabilities { capabilities } = event {
       if let WEnum::Value(capabilities) = capabilities {
+        state.as_mut().xkb_state = None;
         state.as_mut().wl_keyboard.as_ref().map(|v| v.release());
         state.as_mut().wl_keyboard = None;
         state.as_mut().wl_pointer.as_ref().map(|v| v.release());
         state.as_mut().wl_pointer = None;
         if capabilities.contains(wl_seat::Capability::Keyboard) {
-          println!("keyboard");
           state.as_mut().wl_keyboard = Some(proxy.get_keyboard(qhandle, ()));
         }
         if capabilities.contains(wl_seat::Capability::Pointer) {
@@ -79,7 +79,7 @@ where
           let keymap = unsafe {
             Keymap::new_from_fd(
               &context,
-              fd.as_raw_fd(),
+              fd.into_raw_fd(),
               size as usize,
               KEYMAP_FORMAT_TEXT_V1,
               KEYMAP_COMPILE_NO_FLAGS,
